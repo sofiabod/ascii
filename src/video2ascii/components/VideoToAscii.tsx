@@ -1,5 +1,3 @@
-"use client";
-
 import { useEffect, useRef, useState } from "react";
 import { AsciiRenderer } from "../core/AsciiRenderer";
 import type { VideoToAsciiProps, AsciiStats } from "../lib/webgl/types";
@@ -92,44 +90,33 @@ export function Video2Ascii({
       enableSpacebarToggle,
     });
   }, [
-    colored,
-    blend,
-    highlight,
-    brightness,
-    charset,
-    numColumns,
-    enableMouse,
-    trailLength,
-    enableRipple,
-    rippleSpeed,
-    audioEffect,
-    audioRange,
-    enableSpacebarToggle,
+    colored, blend, highlight, brightness, charset, numColumns,
+    enableMouse, trailLength, enableRipple, rippleSpeed,
+    audioEffect, audioRange, enableSpacebarToggle,
   ]);
 
   useEffect(() => {
     const renderer = rendererRef.current;
     if (!renderer) return;
-
-    if (isPlaying) {
-      if (autoPlay && renderer.isReady) {
-        renderer.play();
-      }
-    } else {
-      renderer.pause();
-    }
+    if (isPlaying && autoPlay && renderer.isReady) renderer.play();
+    else if (!isPlaying) renderer.pause();
   }, [isPlaying, autoPlay, isReady]);
 
   return (
     <div className={`video-to-ascii ${className}`}>
-      <div
-        ref={containerRef}
-        className="relative cursor-pointer select-none overflow-hidden bg-black"
-      >
+      <div ref={containerRef} style={{ overflow: "hidden", background: "#000" }}>
         {showStats && isReady && (
-          <div className="absolute top-2 left-2 bg-black/70 text-green-400 px-2 py-1 text-xs font-mono">
-            {stats.fps} FPS | {stats.frameTime.toFixed(2)}ms | {dimensions.cols}
-            ×{dimensions.rows}
+          <div style={{
+            position: "absolute",
+            top: 8,
+            left: 8,
+            background: "rgba(0,0,0,0.7)",
+            color: "#4ade80",
+            padding: "4px 8px",
+            fontSize: 12,
+            fontFamily: "monospace",
+          }}>
+            {stats.fps} FPS | {stats.frameTime.toFixed(2)}ms | {dimensions.cols}x{dimensions.rows}
           </div>
         )}
       </div>
