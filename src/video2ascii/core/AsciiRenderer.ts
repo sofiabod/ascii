@@ -34,20 +34,28 @@ export interface AsciiRendererOptions {
   onReady?: () => void;
 }
 
-interface MousePosition {
-  x: number;
-  y: number;
-}
+const DEFAULTS = {
+  colored: true,
+  blend: 0,
+  highlight: 0,
+  brightness: 1.0,
+  charset: DEFAULT_CHARSET,
+  enableMouse: true,
+  trailLength: 24,
+  enableRipple: false,
+  rippleSpeed: 40,
+  audioEffect: 0,
+  audioRange: 50,
+  autoPlay: true,
+  enableSpacebarToggle: false,
+} as const;
 
-interface Ripple {
-  x: number;
-  y: number;
-  startTime: number;
-}
-
-const MAX_TRAIL_LENGTH = 18;
+const MAX_TRAIL = 18;
 const MAX_RIPPLES = 8;
-const TRAIL_INTERVAL = 60;
+const TRAIL_INTERVAL_MS = 60;
+
+interface Vec2 { x: number; y: number }
+interface Ripple extends Vec2 { startTime: number }
 
 export class AsciiRenderer {
   private container: HTMLElement;
@@ -58,7 +66,7 @@ export class AsciiRenderer {
   private program: WebGLProgram | null = null;
   private videoTexture: WebGLTexture | null = null;
   private atlasTexture: WebGLTexture | null = null;
-  private uniformLocations: UniformLocations | null = null;
+  private uniforms: UniformLocations | null = null;
 
   private animationId = 0;
   private _isReady = false;
@@ -69,83 +77,68 @@ export class AsciiRenderer {
   private frameTimes: number[] = [];
   private lastFpsTime = performance.now();
   private _stats: AsciiStats = { fps: 0, frameTime: 0 };
-
   private _dimensions = { cols: 80, rows: 24 };
 
-  private opts: Required<
-    Pick<
-      AsciiRendererOptions,
-      | "colored"
-      | "blend"
-      | "highlight"
-      | "brightness"
-      | "charset"
-      | "enableMouse"
-      | "trailLength"
-      | "enableRipple"
-      | "rippleSpeed"
-      | "audioEffect"
-      | "audioRange"
-      | "autoPlay"
-      | "enableSpacebarToggle"
-    >
-  > & {
+  private opts: {
     columns?: number;
+    colored: boolean;
+    blend: number;
+    highlight: number;
+    brightness: number;
+    charset: CharsetKey;
+    enableMouse: boolean;
+    trailLength: number;
+    enableRipple: boolean;
+    rippleSpeed: number;
+    audioEffect: number;
+    audioRange: number;
+    autoPlay: boolean;
+    enableSpacebarToggle: boolean;
     onStats?: (stats: AsciiStats) => void;
     onReady?: () => void;
   };
 
-  private mouse: MousePosition = { x: -1, y: -1 };
-  private trail: MousePosition[] = [];
+  private mouse: Vec2 = { x: -1, y: -1 };
+  private trail: Vec2[] = [];
   private trailIntervalId = 0;
   private lastMoveTime = 0;
-
   private ripples: Ripple[] = [];
 
   private audioContext: AudioContext | null = null;
   private analyser: AnalyserNode | null = null;
-  private audioDataArray: Uint8Array<ArrayBuffer> | null = null;
+  private audioData: Uint8Array<ArrayBuffer> | null = null;
   private volume = 0;
   private connectedVideo: HTMLVideoElement | null = null;
-
   private resizeObserver: ResizeObserver | null = null;
 
-  private boundOnMouseMove: (e: MouseEvent) => void;
-  private boundOnMouseLeave: () => void;
-  private boundOnClick: (e: MouseEvent) => void;
-  private boundOnKeyDown: (e: KeyboardEvent) => void;
-  private boundOnLoadedMetadata: () => void;
-  private boundOnPlay: () => void;
-  private boundOnPause: () => void;
-  private boundOnEnded: () => void;
-  private boundOnVideoPlay: () => void;
+  private handleMouseMove: (e: MouseEvent) => void;
+  private handleMouseLeave: () => void;
+  private handleClick: (e: MouseEvent) => void;
+  private handleKeyDown: (e: KeyboardEvent) => void;
+  private handleMetadata: () => void;
+  private handlePlay: () => void;
+  private handleStop: () => void;
+  private handleAudioPlay: () => void;
 
-  constructor(
-    container: string | HTMLElement,
-    options: AsciiRendererOptions
-  ) {
-    if (typeof container === "string") {
-      const el = document.querySelector<HTMLElement>(container);
-      if (!el) throw new Error(`Container not found: ${container}`);
-      this.container = el;
-    } else {
-      this.container = container;
-    }
+  constructor(container: string | HTMLElement, options: AsciiRendererOptions) {
+    this.container = typeof container === "string"
+      ? document.querySelector<HTMLElement>(container) ?? (() => { throw new Error(`Container not found: ${container}`); })()
+      : container;
 
     this.opts = {
-      colored: options.colored ?? true,
-      blend: options.blend ?? 0,
-      highlight: options.highlight ?? 0,
-      brightness: options.brightness ?? 1.0,
-      charset: options.charset ?? DEFAULT_CHARSET,
-      enableMouse: options.enableMouse ?? true,
-      trailLength: options.trailLength ?? 24,
-      enableRipple: options.enableRipple ?? false,
-      rippleSpeed: options.rippleSpeed ?? 40,
-      audioEffect: options.audioEffect ?? 0,
-      audioRange: options.audioRange ?? 50,
-      autoPlay: options.autoPlay ?? true,
-      enableSpacebarToggle: options.enableSpacebarToggle ?? false,
+      colored: options.colored ?? DEFAULTS.colored,
+      blend: options.blend ?? DEFAULTS.blend,
+      highlight: options.highlight ?? DEFAULTS.highlight,
+      brightness: options.brightness ?? DEFAULTS.brightness,
+      charset: options.charset ?? DEFAULTS.charset,
+      enableMouse: options.enableMouse ?? DEFAULTS.enableMouse,
+      trailLength: options.trailLength ?? DEFAULTS.trailLength,
+      enableRipple: options.enableRipple ?? DEFAULTS.enableRipple,
+      rippleSpeed: options.rippleSpeed ?? DEFAULTS.rippleSpeed,
+      audioEffect: options.audioEffect ?? DEFAULTS.audioEffect,
+      audioRange: options.audioRange ?? DEFAULTS.audioRange,
+      autoPlay: options.autoPlay ?? DEFAULTS.autoPlay,
+      enableSpacebarToggle: options.enableSpacebarToggle ?? DEFAULTS.enableSpacebarToggle,
       columns: options.columns,
       onStats: options.onStats,
       onReady: options.onReady,
@@ -156,161 +149,124 @@ export class AsciiRenderer {
     this.canvas.style.maxWidth = "100%";
 
     this.video = document.createElement("video");
-    this.video.src = options.videoSrc;
-    this.video.muted = this.opts.audioEffect === 0;
-    this.video.loop = true;
-    this.video.playsInline = true;
-    this.video.crossOrigin = "anonymous";
+    Object.assign(this.video, {
+      src: options.videoSrc,
+      muted: this.opts.audioEffect === 0,
+      loop: true,
+      playsInline: true,
+      crossOrigin: "anonymous",
+    });
     this.video.style.display = "none";
 
     this.container.appendChild(this.video);
     this.container.appendChild(this.canvas);
 
-    this.boundOnMouseMove = this.onMouseMove.bind(this);
-    this.boundOnMouseLeave = this.onMouseLeave.bind(this);
-    this.boundOnClick = this.onClick.bind(this);
-    this.boundOnKeyDown = this.onKeyDown.bind(this);
-    this.boundOnLoadedMetadata = this.onLoadedMetadata.bind(this);
-    this.boundOnPlay = this.onVideoPlay.bind(this);
-    this.boundOnPause = this.onVideoPause.bind(this);
-    this.boundOnEnded = this.onVideoEnded.bind(this);
-    this.boundOnVideoPlay = this.onVideoPlayForAudio.bind(this);
+    this.handleMouseMove = this.onMouseMove.bind(this);
+    this.handleMouseLeave = this.onMouseLeave.bind(this);
+    this.handleClick = this.onClick.bind(this);
+    this.handleKeyDown = this.onKeyDown.bind(this);
+    this.handleMetadata = this.onMetadata.bind(this);
+    this.handlePlay = this.onPlay.bind(this);
+    this.handleStop = this.onStop.bind(this);
+    this.handleAudioPlay = () => { if (this.opts.audioEffect > 0) this.connectAudio(); };
 
-    this.video.addEventListener("loadedmetadata", this.boundOnLoadedMetadata);
-    this.video.addEventListener("play", this.boundOnPlay);
-    this.video.addEventListener("pause", this.boundOnPause);
-    this.video.addEventListener("ended", this.boundOnEnded);
+    this.video.addEventListener("loadedmetadata", this.handleMetadata);
+    this.video.addEventListener("play", this.handlePlay);
+    this.video.addEventListener("pause", this.handleStop);
+    this.video.addEventListener("ended", this.handleStop);
 
-    if (this.video.readyState >= 1) {
-      this.onLoadedMetadata();
-    }
-
-    if (this.opts.enableMouse) {
-      this.setupMouseListeners();
-    }
-
-    if (this.opts.enableRipple) {
-      this.container.addEventListener("click", this.boundOnClick);
-    }
-
-    if (this.opts.enableSpacebarToggle) {
-      window.addEventListener("keydown", this.boundOnKeyDown);
-    }
+    if (this.video.readyState >= 1) this.onMetadata();
+    if (this.opts.enableMouse) this.addMouseListeners();
+    if (this.opts.enableRipple) this.container.addEventListener("click", this.handleClick);
+    if (this.opts.enableSpacebarToggle) window.addEventListener("keydown", this.handleKeyDown);
 
     if (this.opts.columns) {
       this.resizeObserver = new ResizeObserver(() => {
-        if (this.video.readyState >= 1) {
-          const wasPlaying = !this.video.paused;
-          if (this.initWebGL() && wasPlaying) {
-            requestAnimationFrame(() => this.render());
-          }
-        }
+        if (this.video.readyState < 1) return;
+        const wasPlaying = !this.video.paused;
+        if (this.initWebGL() && wasPlaying) requestAnimationFrame(() => this.render());
       });
       this.resizeObserver.observe(this.container);
     }
 
     if (this.opts.audioEffect > 0) {
-      this.video.addEventListener("play", this.boundOnVideoPlay);
-      if (!this.video.paused) {
-        this.connectAudio();
-      }
+      this.video.addEventListener("play", this.handleAudioPlay);
+      if (!this.video.paused) this.connectAudio();
     }
   }
 
-  play(): void {
-    this.video.play().catch(() => {});
-  }
+  play(): void { this.video.play().catch(() => {}); }
+  pause(): void { this.video.pause(); }
+  toggle(): void { this.video.paused ? this.play() : this.pause(); }
 
-  pause(): void {
-    this.video.pause();
-  }
-
-  toggle(): void {
-    if (this.video.paused) {
-      this.video.play().catch(() => {});
-    } else {
-      this.video.pause();
-    }
-  }
+  get isReady() { return this._isReady; }
+  get isPlaying() { return this._isPlaying; }
+  get dimensions() { return { ...this._dimensions }; }
+  get stats() { return { ...this._stats }; }
+  get canvasElement() { return this.canvas; }
+  get videoElement() { return this.video; }
 
   setOptions(options: Partial<AsciiRendererOptions>): void {
-    let needsReinit = false;
-    let needsMouseSetup = false;
-    let needsMouseTeardown = false;
-    let needsRippleSetup = false;
-    let needsRippleTeardown = false;
-    let needsAudioSetup = false;
-    let needsAudioTeardown = false;
-    let needsSpacebarSetup = false;
-    let needsSpacebarTeardown = false;
+    let reinit = false;
 
     if (options.columns !== undefined && options.columns !== this.opts.columns) {
       this.opts.columns = options.columns;
-      needsReinit = true;
+      reinit = true;
     }
     if (options.charset !== undefined && options.charset !== this.opts.charset) {
       this.opts.charset = options.charset;
-      needsReinit = true;
+      reinit = true;
     }
+    if (options.brightness !== undefined && options.brightness !== this.opts.brightness) {
+      this.opts.brightness = options.brightness;
+      reinit = true;
+    }
+    if (options.videoSrc !== undefined) {
+      this.video.src = options.videoSrc;
+      reinit = true;
+    }
+
     if (options.colored !== undefined) this.opts.colored = options.colored;
     if (options.blend !== undefined) this.opts.blend = options.blend;
     if (options.highlight !== undefined) this.opts.highlight = options.highlight;
-    if (options.brightness !== undefined) {
-      this.opts.brightness = options.brightness;
-      needsReinit = true;
-    }
     if (options.trailLength !== undefined) this.opts.trailLength = options.trailLength;
     if (options.rippleSpeed !== undefined) this.opts.rippleSpeed = options.rippleSpeed;
-    if (options.audioEffect !== undefined) {
-      const wasEnabled = this.opts.audioEffect > 0;
-      this.opts.audioEffect = options.audioEffect;
-      const isEnabled = this.opts.audioEffect > 0;
-      if (!wasEnabled && isEnabled) needsAudioSetup = true;
-      if (wasEnabled && !isEnabled) needsAudioTeardown = true;
-      this.video.muted = this.opts.audioEffect === 0;
-    }
     if (options.audioRange !== undefined) this.opts.audioRange = options.audioRange;
     if (options.onStats !== undefined) this.opts.onStats = options.onStats;
     if (options.onReady !== undefined) this.opts.onReady = options.onReady;
 
-    if (options.enableMouse !== undefined && options.enableMouse !== this.opts.enableMouse) {
-      if (options.enableMouse) needsMouseSetup = true;
-      else needsMouseTeardown = true;
-      this.opts.enableMouse = options.enableMouse;
-    }
-    if (options.enableRipple !== undefined && options.enableRipple !== this.opts.enableRipple) {
-      if (options.enableRipple) needsRippleSetup = true;
-      else needsRippleTeardown = true;
-      this.opts.enableRipple = options.enableRipple;
-    }
-    if (options.enableSpacebarToggle !== undefined && options.enableSpacebarToggle !== this.opts.enableSpacebarToggle) {
-      if (options.enableSpacebarToggle) needsSpacebarSetup = true;
-      else needsSpacebarTeardown = true;
-      this.opts.enableSpacebarToggle = options.enableSpacebarToggle;
+    this.toggleListener(
+      options.enableMouse, this.opts.enableMouse,
+      () => this.addMouseListeners(), () => this.removeMouseListeners(),
+      (v) => { this.opts.enableMouse = v; }
+    );
+    this.toggleListener(
+      options.enableRipple, this.opts.enableRipple,
+      () => this.container.addEventListener("click", this.handleClick),
+      () => this.container.removeEventListener("click", this.handleClick),
+      (v) => { this.opts.enableRipple = v; }
+    );
+    this.toggleListener(
+      options.enableSpacebarToggle, this.opts.enableSpacebarToggle,
+      () => window.addEventListener("keydown", this.handleKeyDown),
+      () => window.removeEventListener("keydown", this.handleKeyDown),
+      (v) => { this.opts.enableSpacebarToggle = v; }
+    );
+
+    if (options.audioEffect !== undefined) {
+      const wasOn = this.opts.audioEffect > 0;
+      this.opts.audioEffect = options.audioEffect;
+      const isOn = this.opts.audioEffect > 0;
+      this.video.muted = !isOn;
+      if (!wasOn && isOn) {
+        this.video.addEventListener("play", this.handleAudioPlay);
+        if (!this.video.paused) this.connectAudio();
+      } else if (wasOn && !isOn) {
+        this.video.removeEventListener("play", this.handleAudioPlay);
+      }
     }
 
-    if (options.videoSrc !== undefined) {
-      this.video.src = options.videoSrc;
-      needsReinit = true;
-    }
-
-    if (needsMouseTeardown) this.teardownMouseListeners();
-    if (needsMouseSetup) this.setupMouseListeners();
-    if (needsRippleTeardown) this.container.removeEventListener("click", this.boundOnClick);
-    if (needsRippleSetup) this.container.addEventListener("click", this.boundOnClick);
-    if (needsSpacebarTeardown) window.removeEventListener("keydown", this.boundOnKeyDown);
-    if (needsSpacebarSetup) window.addEventListener("keydown", this.boundOnKeyDown);
-    if (needsAudioTeardown) {
-      this.video.removeEventListener("play", this.boundOnVideoPlay);
-    }
-    if (needsAudioSetup) {
-      this.video.addEventListener("play", this.boundOnVideoPlay);
-      if (!this.video.paused) this.connectAudio();
-    }
-
-    if (needsReinit && this.video.readyState >= 1) {
-      this.initWebGL();
-    }
+    if (reinit && this.video.readyState >= 1) this.initWebGL();
   }
 
   destroy(): void {
@@ -320,20 +276,17 @@ export class AsciiRenderer {
     cancelAnimationFrame(this.animationId);
     clearInterval(this.trailIntervalId);
 
-    this.video.removeEventListener("loadedmetadata", this.boundOnLoadedMetadata);
-    this.video.removeEventListener("play", this.boundOnPlay);
-    this.video.removeEventListener("pause", this.boundOnPause);
-    this.video.removeEventListener("ended", this.boundOnEnded);
-    this.video.removeEventListener("play", this.boundOnVideoPlay);
+    this.video.removeEventListener("loadedmetadata", this.handleMetadata);
+    this.video.removeEventListener("play", this.handlePlay);
+    this.video.removeEventListener("pause", this.handleStop);
+    this.video.removeEventListener("ended", this.handleStop);
+    this.video.removeEventListener("play", this.handleAudioPlay);
 
-    this.teardownMouseListeners();
-    this.container.removeEventListener("click", this.boundOnClick);
-    window.removeEventListener("keydown", this.boundOnKeyDown);
+    this.removeMouseListeners();
+    this.container.removeEventListener("click", this.handleClick);
+    window.removeEventListener("keydown", this.handleKeyDown);
 
-    if (this.resizeObserver) {
-      this.resizeObserver.disconnect();
-      this.resizeObserver = null;
-    }
+    this.resizeObserver?.disconnect();
 
     if (this.gl) {
       if (this.videoTexture) this.gl.deleteTexture(this.videoTexture);
@@ -341,216 +294,158 @@ export class AsciiRenderer {
       if (this.program) this.gl.deleteProgram(this.program);
     }
 
-    if (this.audioContext) {
-      this.audioContext.close();
-    }
-
+    this.audioContext?.close();
     this.video.pause();
 
-    if (this.canvas.parentNode === this.container) {
-      this.container.removeChild(this.canvas);
-    }
-    if (this.video.parentNode === this.container) {
-      this.container.removeChild(this.video);
-    }
-  }
-
-  get isReady(): boolean {
-    return this._isReady;
-  }
-
-  get isPlaying(): boolean {
-    return this._isPlaying;
-  }
-
-  get dimensions(): { cols: number; rows: number } {
-    return { ...this._dimensions };
-  }
-
-  get stats(): AsciiStats {
-    return { ...this._stats };
-  }
-
-  get canvasElement(): HTMLCanvasElement {
-    return this.canvas;
-  }
-
-  get videoElement(): HTMLVideoElement {
-    return this.video;
+    if (this.canvas.parentNode === this.container) this.container.removeChild(this.canvas);
+    if (this.video.parentNode === this.container) this.container.removeChild(this.video);
   }
 
   captureText(): string {
-    const video = this.video;
-    if (!video.videoWidth || !this._isReady) return "";
+    if (!this.video.videoWidth || !this._isReady) return "";
 
     const { cols, rows } = this._dimensions;
     const chars = getCharArray(this.opts.charset);
-
-    const sampleCanvas = document.createElement("canvas");
-    sampleCanvas.width = cols;
-    sampleCanvas.height = rows;
-    const ctx = sampleCanvas.getContext("2d");
+    const canvas = document.createElement("canvas");
+    canvas.width = cols;
+    canvas.height = rows;
+    const ctx = canvas.getContext("2d");
     if (!ctx) return "";
 
-    ctx.drawImage(video, 0, 0, cols, rows);
-    const imageData = ctx.getImageData(0, 0, cols, rows);
-    const pixels = imageData.data;
+    ctx.drawImage(this.video, 0, 0, cols, rows);
+    const { data } = ctx.getImageData(0, 0, cols, rows);
+    const lines: string[] = [];
 
-    let text = "";
     for (let y = 0; y < rows; y++) {
+      let line = "";
       for (let x = 0; x < cols; x++) {
         const i = (y * cols + x) * 4;
-        const r = pixels[i];
-        const g = pixels[i + 1];
-        const b = pixels[i + 2];
-        const brightness = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-        const adjusted = Math.pow(brightness, 1.0 / this.opts.brightness);
-        const clamped = Math.min(Math.max(adjusted, 0), 1);
-        const charIndex = Math.min(
-          Math.floor(clamped * chars.length),
-          chars.length - 1
-        );
-        text += chars[charIndex];
+        const luma = (0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]) / 255;
+        const adjusted = Math.min(Math.max(Math.pow(luma, 1 / this.opts.brightness), 0), 1);
+        line += chars[Math.min(Math.floor(adjusted * chars.length), chars.length - 1)];
       }
-      if (y < rows - 1) text += "\n";
+      lines.push(line);
     }
 
-    return text;
+    return lines.join("\n");
+  }
+
+  private toggleListener(
+    newVal: boolean | undefined,
+    currentVal: boolean,
+    setup: () => void,
+    teardown: () => void,
+    assign: (v: boolean) => void,
+  ): void {
+    if (newVal === undefined || newVal === currentVal) return;
+    if (newVal) setup(); else teardown();
+    assign(newVal);
   }
 
   private initWebGL(): boolean {
-    const canvas = this.canvas;
-    const video = this.video;
-    const container = this.container;
-    if (!video.videoWidth) return false;
+    if (!this.video.videoWidth) return false;
 
-    const defaultWidth = typeof window !== "undefined" ? window.innerWidth : 900;
-    const numColumns = this.opts.columns;
+    const cols = this.opts.columns;
+    const containerWidth = this.container.clientWidth || window.innerWidth;
 
-    let finalFontSize: number;
+    let fontSize: number;
     let finalCols: number;
 
-    if (numColumns) {
-      const actualWidth = container.clientWidth || defaultWidth;
-      finalFontSize = actualWidth / (numColumns * CHAR_WIDTH_RATIO);
-      finalCols = numColumns;
+    if (cols) {
+      fontSize = containerWidth / (cols * CHAR_WIDTH_RATIO);
+      finalCols = cols;
     } else {
-      finalFontSize = 10;
-      finalCols = Math.floor(defaultWidth / (10 * CHAR_WIDTH_RATIO));
+      fontSize = 10;
+      finalCols = Math.floor(containerWidth / (10 * CHAR_WIDTH_RATIO));
     }
 
-    const grid = calculateGridDimensions(
-      video.videoWidth,
-      video.videoHeight,
-      finalCols
-    );
+    const grid = calculateGridDimensions(this.video.videoWidth, this.video.videoHeight, finalCols);
     this._dimensions = grid;
 
     const dpr = window.devicePixelRatio || 1;
-    const finalCharWidth = finalFontSize * CHAR_WIDTH_RATIO;
-    const pixelWidth = grid.cols * finalCharWidth;
-    const pixelHeight = grid.rows * finalFontSize;
-    canvas.width = Math.round(pixelWidth * dpr);
-    canvas.height = Math.round(pixelHeight * dpr);
-    canvas.style.width = pixelWidth + "px";
-    canvas.style.height = pixelHeight + "px";
+    const charWidth = fontSize * CHAR_WIDTH_RATIO;
+    const pxW = grid.cols * charWidth;
+    const pxH = grid.rows * fontSize;
+    this.canvas.width = Math.round(pxW * dpr);
+    this.canvas.height = Math.round(pxH * dpr);
+    this.canvas.style.width = pxW + "px";
+    this.canvas.style.height = pxH + "px";
 
-    const gl = canvas.getContext("webgl2", {
-      antialias: false,
-      preserveDrawingBuffer: false,
-    });
-    if (!gl) {
-      console.error("WebGL2 not supported");
-      return false;
-    }
+    const gl = this.canvas.getContext("webgl2", { antialias: false, preserveDrawingBuffer: false });
+    if (!gl) return false;
     this.gl = gl;
 
-    const vertexShader = compileShader(gl, VERTEX_SHADER, gl.VERTEX_SHADER);
-    const fragmentShader = compileShader(gl, FRAGMENT_SHADER, gl.FRAGMENT_SHADER);
-    if (!vertexShader || !fragmentShader) return false;
+    const vs = compileShader(gl, VERTEX_SHADER, gl.VERTEX_SHADER);
+    const fs = compileShader(gl, FRAGMENT_SHADER, gl.FRAGMENT_SHADER);
+    if (!vs || !fs) return false;
 
-    const program = createProgram(gl, vertexShader, fragmentShader);
+    const program = createProgram(gl, vs, fs);
     if (!program) return false;
     this.program = program;
     gl.useProgram(program);
 
     createFullscreenQuad(gl, program);
-
     this.videoTexture = createVideoTexture(gl);
+
     const chars = getCharArray(this.opts.charset);
-    this.atlasTexture = createAsciiAtlas(gl, chars, finalFontSize);
+    this.atlasTexture = createAsciiAtlas(gl, chars, fontSize);
 
-    const locations = this.cacheUniformLocations(gl, program);
-    this.uniformLocations = locations;
+    const u = this.cacheUniforms(gl, program);
+    this.uniforms = u;
 
-    gl.uniform1i(locations.u_video, 0);
-    gl.uniform1i(locations.u_asciiAtlas, 1);
-
-    gl.uniform2f(locations.u_resolution, pixelWidth, pixelHeight);
-    gl.uniform2f(locations.u_charSize, finalCharWidth, finalFontSize);
-    gl.uniform2f(locations.u_gridSize, finalCols, grid.rows);
-    gl.uniform1f(locations.u_numChars, chars.length);
-    gl.uniform1f(locations.u_brightness, this.opts.brightness);
-
-    gl.uniform2f(locations.u_mouse, -1, -1);
-    gl.uniform1f(locations.u_mouseRadius, 0);
-    gl.uniform1i(locations.u_trailLength, 0);
-    gl.uniform1f(locations.u_rippleEnabled, 0);
-    gl.uniform1f(locations.u_audioLevel, 0);
-    gl.uniform1f(locations.u_audioReactivity, 0);
-    gl.uniform1f(locations.u_audioSensitivity, 0);
-
-    gl.viewport(0, 0, Math.round(pixelWidth * dpr), Math.round(pixelHeight * dpr));
+    gl.uniform1i(u.u_video, 0);
+    gl.uniform1i(u.u_asciiAtlas, 1);
+    gl.uniform2f(u.u_resolution, pxW, pxH);
+    gl.uniform2f(u.u_charSize, charWidth, fontSize);
+    gl.uniform2f(u.u_gridSize, finalCols, grid.rows);
+    gl.uniform1f(u.u_numChars, chars.length);
+    gl.uniform1f(u.u_brightness, this.opts.brightness);
+    gl.uniform2f(u.u_mouse, -1, -1);
+    gl.uniform1f(u.u_mouseRadius, 0);
+    gl.uniform1i(u.u_trailLength, 0);
+    gl.uniform1f(u.u_rippleEnabled, 0);
+    gl.uniform1f(u.u_audioLevel, 0);
+    gl.uniform1f(u.u_audioReactivity, 0);
+    gl.uniform1f(u.u_audioSensitivity, 0);
+    gl.viewport(0, 0, Math.round(pxW * dpr), Math.round(pxH * dpr));
 
     this._isReady = true;
     this.opts.onReady?.();
     return true;
   }
 
-  private cacheUniformLocations(
-    gl: WebGL2RenderingContext,
-    program: WebGLProgram
-  ): UniformLocations {
-    const get = (name: string) => gl.getUniformLocation(program, name);
-
+  private cacheUniforms(gl: WebGL2RenderingContext, program: WebGLProgram): UniformLocations {
+    const loc = (name: string) => gl.getUniformLocation(program, name);
     return {
-      u_video: get("u_video"),
-      u_asciiAtlas: get("u_asciiAtlas"),
-      u_resolution: get("u_resolution"),
-      u_charSize: get("u_charSize"),
-      u_gridSize: get("u_gridSize"),
-      u_numChars: get("u_numChars"),
-      u_colored: get("u_colored"),
-      u_blend: get("u_blend"),
-      u_highlight: get("u_highlight"),
-      u_brightness: get("u_brightness"),
-      u_mouse: get("u_mouse"),
-      u_mouseRadius: get("u_mouseRadius"),
-      u_trailLength: get("u_trailLength"),
-      u_trail: Array.from({ length: MAX_TRAIL_LENGTH }, (_, i) =>
-        get(`u_trail[${i}]`)
-      ),
-      u_time: get("u_time"),
-      u_rippleEnabled: get("u_rippleEnabled"),
-      u_rippleSpeed: get("u_rippleSpeed"),
-      u_ripples: Array.from({ length: MAX_RIPPLES }, (_, i) =>
-        get(`u_ripples[${i}]`)
-      ),
-      u_audioLevel: get("u_audioLevel"),
-      u_audioReactivity: get("u_audioReactivity"),
-      u_audioSensitivity: get("u_audioSensitivity"),
+      u_video: loc("u_video"),
+      u_asciiAtlas: loc("u_asciiAtlas"),
+      u_resolution: loc("u_resolution"),
+      u_charSize: loc("u_charSize"),
+      u_gridSize: loc("u_gridSize"),
+      u_numChars: loc("u_numChars"),
+      u_colored: loc("u_colored"),
+      u_blend: loc("u_blend"),
+      u_highlight: loc("u_highlight"),
+      u_brightness: loc("u_brightness"),
+      u_mouse: loc("u_mouse"),
+      u_mouseRadius: loc("u_mouseRadius"),
+      u_trailLength: loc("u_trailLength"),
+      u_trail: Array.from({ length: MAX_TRAIL }, (_, i) => loc(`u_trail[${i}]`)),
+      u_time: loc("u_time"),
+      u_rippleEnabled: loc("u_rippleEnabled"),
+      u_rippleSpeed: loc("u_rippleSpeed"),
+      u_ripples: Array.from({ length: MAX_RIPPLES }, (_, i) => loc(`u_ripples[${i}]`)),
+      u_audioLevel: loc("u_audioLevel"),
+      u_audioReactivity: loc("u_audioReactivity"),
+      u_audioSensitivity: loc("u_audioSensitivity"),
     };
   }
 
   private render = (): void => {
-    const gl = this.gl;
-    const video = this.video;
-    const program = this.program;
-    const locations = this.uniformLocations;
+    const { gl, program, uniforms: u, video } = this;
+    if (!gl || !program || !u || video.paused || video.ended) return;
 
-    if (!gl || !program || !locations || video.paused || video.ended) return;
-
-    const frameStart = performance.now();
+    const t0 = performance.now();
 
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, this.videoTexture);
@@ -560,72 +455,64 @@ export class AsciiRenderer {
     gl.activeTexture(gl.TEXTURE1);
     gl.bindTexture(gl.TEXTURE_2D, this.atlasTexture);
 
-    gl.uniform1i(locations.u_colored, this.opts.colored ? 1 : 0);
-    gl.uniform1f(locations.u_blend, this.opts.blend / 100);
-    gl.uniform1f(locations.u_highlight, this.opts.highlight / 100);
-    gl.uniform1f(locations.u_brightness, this.opts.brightness);
-    gl.uniform1f(locations.u_time, performance.now() / 1000.0);
+    gl.uniform1i(u.u_colored, this.opts.colored ? 1 : 0);
+    gl.uniform1f(u.u_blend, this.opts.blend / 100);
+    gl.uniform1f(u.u_highlight, this.opts.highlight / 100);
+    gl.uniform1f(u.u_brightness, this.opts.brightness);
+    gl.uniform1f(u.u_time, t0 / 1000);
 
-    this.updateMouseUniforms(gl, locations);
-    this.updateRippleUniforms(gl, locations);
-    this.updateAudioUniforms(gl, locations);
+    this.uploadMouseUniforms(gl, u);
+    this.uploadRippleUniforms(gl, u);
+    this.uploadAudioUniforms(gl, u);
 
     gl.drawArrays(gl.TRIANGLES, 0, 6);
 
-    const frameEnd = performance.now();
     this.frameCount++;
-    this.frameTimes.push(frameEnd - frameStart);
+    this.frameTimes.push(performance.now() - t0);
     if (this.frameTimes.length > 60) this.frameTimes.shift();
 
-    const now = performance.now();
-    if (now - this.lastFpsTime >= 1000) {
-      const avgFrameTime =
-        this.frameTimes.reduce((a, b) => a + b, 0) / this.frameTimes.length;
-      this._stats = { fps: this.frameCount, frameTime: avgFrameTime };
+    if (t0 - this.lastFpsTime >= 1000) {
+      const avg = this.frameTimes.reduce((a, b) => a + b, 0) / this.frameTimes.length;
+      this._stats = { fps: this.frameCount, frameTime: avg };
       this.opts.onStats?.(this._stats);
       this.frameCount = 0;
-      this.lastFpsTime = now;
+      this.lastFpsTime = t0;
     }
 
     this.animationId = requestAnimationFrame(this.render);
   };
 
-  private setupMouseListeners(): void {
-    this.container.addEventListener("mousemove", this.boundOnMouseMove);
-    this.container.addEventListener("mouseleave", this.boundOnMouseLeave);
+  private addMouseListeners(): void {
+    this.container.addEventListener("mousemove", this.handleMouseMove);
+    this.container.addEventListener("mouseleave", this.handleMouseLeave);
 
     this.trailIntervalId = window.setInterval(() => {
-      const pos = this.mouse;
-      if (pos.x < 0) return;
+      if (this.mouse.x < 0) return;
 
-      const trail = this.trail;
-      const last = trail[0];
-      const dx = last ? Math.abs(last.x - pos.x) : 1;
-      const dy = last ? Math.abs(last.y - pos.y) : 1;
-      const moved = !last || dx > 0.005 || dy > 0.005;
+      const last = this.trail[0];
+      const moved = !last
+        || Math.abs(last.x - this.mouse.x) > 0.005
+        || Math.abs(last.y - this.mouse.y) > 0.005;
 
       if (moved) {
         this.lastMoveTime = performance.now();
-        trail.unshift({ ...pos });
-        if (trail.length > this.opts.trailLength) {
-          trail.pop();
-        }
-      } else if (trail.length > 0) {
-        trail.pop();
-        if (trail.length > 0) trail.pop();
+        this.trail.unshift({ ...this.mouse });
+        if (this.trail.length > this.opts.trailLength) this.trail.pop();
+      } else if (this.trail.length > 0) {
+        this.trail.pop();
+        if (this.trail.length > 0) this.trail.pop();
       }
-    }, TRAIL_INTERVAL);
+    }, TRAIL_INTERVAL_MS);
   }
 
-  private teardownMouseListeners(): void {
-    this.container.removeEventListener("mousemove", this.boundOnMouseMove);
-    this.container.removeEventListener("mouseleave", this.boundOnMouseLeave);
+  private removeMouseListeners(): void {
+    this.container.removeEventListener("mousemove", this.handleMouseMove);
+    this.container.removeEventListener("mouseleave", this.handleMouseLeave);
     clearInterval(this.trailIntervalId);
     this.trailIntervalId = 0;
   }
 
   private onMouseMove(e: MouseEvent): void {
-    if (!this.opts.enableMouse) return;
     const rect = this.container.getBoundingClientRect();
     this.mouse = {
       x: (e.clientX - rect.left) / rect.width,
@@ -640,163 +527,105 @@ export class AsciiRenderer {
     this.lastMoveTime = 0;
   }
 
-  private updateMouseUniforms(
-    gl: WebGL2RenderingContext,
-    locations: UniformLocations
-  ): void {
+  private uploadMouseUniforms(gl: WebGL2RenderingContext, u: UniformLocations): void {
     if (!this.opts.enableMouse) return;
 
-    const timeSinceMove = performance.now() - this.lastMoveTime;
-    const glow =
-      timeSinceMove < 200
-        ? 1.0
-        : Math.max(0, 1.0 - (timeSinceMove - 200) / 500);
+    const elapsed = performance.now() - this.lastMoveTime;
+    const glow = elapsed < 200 ? 1 : Math.max(0, 1 - (elapsed - 200) / 500);
 
-    gl.uniform2f(locations.u_mouse, this.mouse.x, this.mouse.y);
-    gl.uniform1f(locations.u_mouseRadius, glow);
+    gl.uniform2f(u.u_mouse, this.mouse.x, this.mouse.y);
+    gl.uniform1f(u.u_mouseRadius, glow);
+    gl.uniform1i(u.u_trailLength, this.trail.length);
 
-    const trail = this.trail;
-    gl.uniform1i(locations.u_trailLength, trail.length);
-
-    for (let i = 0; i < MAX_TRAIL_LENGTH; i++) {
-      const loc = locations.u_trail[i];
-      if (loc) {
-        const pos = trail[i] || { x: -1, y: -1 };
-        gl.uniform2f(loc, pos.x, pos.y);
-      }
+    for (let i = 0; i < MAX_TRAIL; i++) {
+      const loc = u.u_trail[i];
+      if (!loc) continue;
+      const p = this.trail[i];
+      gl.uniform2f(loc, p?.x ?? -1, p?.y ?? -1);
     }
   }
 
   private onClick(e: MouseEvent): void {
     if (!this.opts.enableRipple) return;
-
     const rect = this.container.getBoundingClientRect();
-    const x = (e.clientX - rect.left) / rect.width;
-    const y = (e.clientY - rect.top) / rect.height;
-
     this.ripples.unshift({
-      x,
-      y,
+      x: (e.clientX - rect.left) / rect.width,
+      y: (e.clientY - rect.top) / rect.height,
       startTime: performance.now() / 1000,
     });
-
-    if (this.ripples.length > MAX_RIPPLES) {
-      this.ripples.pop();
-    }
+    if (this.ripples.length > MAX_RIPPLES) this.ripples.pop();
   }
 
-  private updateRippleUniforms(
-    gl: WebGL2RenderingContext,
-    locations: UniformLocations
-  ): void {
+  private uploadRippleUniforms(gl: WebGL2RenderingContext, u: UniformLocations): void {
     if (!this.opts.enableRipple) return;
 
-    const currentTime = performance.now() / 1000;
+    const now = performance.now() / 1000;
+    gl.uniform1f(u.u_time, now);
+    gl.uniform1f(u.u_rippleEnabled, 1);
+    gl.uniform1f(u.u_rippleSpeed, this.opts.rippleSpeed);
 
-    gl.uniform1f(locations.u_time, currentTime);
-    gl.uniform1f(locations.u_rippleEnabled, 1.0);
-    gl.uniform1f(locations.u_rippleSpeed, this.opts.rippleSpeed);
-
-    const maxDist = Math.sqrt(
-      this._dimensions.cols ** 2 + this._dimensions.rows ** 2
-    );
-    const maxLifetime = maxDist / this.opts.rippleSpeed + 1.0;
-    this.ripples = this.ripples.filter(
-      (r) => currentTime - r.startTime < maxLifetime
-    );
+    const maxDist = Math.hypot(this._dimensions.cols, this._dimensions.rows);
+    const maxLife = maxDist / this.opts.rippleSpeed + 1;
+    this.ripples = this.ripples.filter(r => now - r.startTime < maxLife);
 
     for (let i = 0; i < MAX_RIPPLES; i++) {
-      const loc = locations.u_ripples[i];
-      if (loc) {
-        const ripple = this.ripples[i];
-        if (ripple) {
-          gl.uniform4f(loc, ripple.x, ripple.y, ripple.startTime, 1.0);
-        } else {
-          gl.uniform4f(loc, 0, 0, 0, 0.0);
-        }
-      }
+      const loc = u.u_ripples[i];
+      if (!loc) continue;
+      const r = this.ripples[i];
+      gl.uniform4f(loc, r?.x ?? 0, r?.y ?? 0, r?.startTime ?? 0, r ? 1 : 0);
     }
   }
 
   private connectAudio(): void {
-    const video = this.video;
-
-    if (this.connectedVideo === video && this.audioContext) {
+    if (this.connectedVideo === this.video && this.audioContext) {
       this.audioContext.resume();
       return;
     }
 
     try {
-      if (!this.audioContext) {
-        this.audioContext = new AudioContext();
-      }
-
-      const ctx = this.audioContext;
-      const analyser = ctx.createAnalyser();
+      this.audioContext ??= new AudioContext();
+      const analyser = this.audioContext.createAnalyser();
       analyser.fftSize = 256;
       analyser.smoothingTimeConstant = 0.8;
       this.analyser = analyser;
+      this.audioData = new Uint8Array(analyser.frequencyBinCount) as Uint8Array<ArrayBuffer>;
 
-      this.audioDataArray = new Uint8Array(
-        analyser.frequencyBinCount
-      ) as Uint8Array<ArrayBuffer>;
-
-      const source = ctx.createMediaElementSource(video);
+      const source = this.audioContext.createMediaElementSource(this.video);
       source.connect(analyser);
-      analyser.connect(ctx.destination);
-      this.connectedVideo = video;
-
-      ctx.resume();
-    } catch (error) {
-      console.warn("Failed to connect audio analyzer:", error);
+      analyser.connect(this.audioContext.destination);
+      this.connectedVideo = this.video;
+      this.audioContext.resume();
+    } catch {
+      // audio connection failed silently
     }
   }
 
-  private onVideoPlayForAudio(): void {
-    if (this.opts.audioEffect > 0) {
-      this.connectAudio();
-    }
-  }
-
-  private updateAudioUniforms(
-    gl: WebGL2RenderingContext,
-    locations: UniformLocations
-  ): void {
+  private uploadAudioUniforms(gl: WebGL2RenderingContext, u: UniformLocations): void {
     if (this.opts.audioEffect <= 0) return;
 
-    if (this.analyser && this.audioDataArray) {
-      this.analyser.getByteFrequencyData(this.audioDataArray);
+    if (this.analyser && this.audioData) {
+      this.analyser.getByteFrequencyData(this.audioData);
       let sum = 0;
-      for (let i = 0; i < this.audioDataArray.length; i++) {
-        sum += this.audioDataArray[i];
-      }
-      const average = sum / this.audioDataArray.length / 255;
-      this.volume = this.volume * 0.7 + average * 0.3;
+      for (let i = 0; i < this.audioData.length; i++) sum += this.audioData[i];
+      this.volume = this.volume * 0.7 + (sum / this.audioData.length / 255) * 0.3;
     }
 
-    gl.uniform1f(locations.u_audioLevel, this.volume);
-    gl.uniform1f(locations.u_audioReactivity, this.opts.audioEffect / 100);
-    gl.uniform1f(locations.u_audioSensitivity, this.opts.audioRange / 100);
+    gl.uniform1f(u.u_audioLevel, this.volume);
+    gl.uniform1f(u.u_audioReactivity, this.opts.audioEffect / 100);
+    gl.uniform1f(u.u_audioSensitivity, this.opts.audioRange / 100);
   }
 
-  private onLoadedMetadata(): void {
+  private onMetadata(): void {
     this.initWebGL();
-    if (this.opts.autoPlay) {
-      this.play();
-    }
+    if (this.opts.autoPlay) this.play();
   }
 
-  private onVideoPlay(): void {
+  private onPlay(): void {
     this._isPlaying = true;
     this.animationId = requestAnimationFrame(this.render);
   }
 
-  private onVideoPause(): void {
-    this._isPlaying = false;
-    cancelAnimationFrame(this.animationId);
-  }
-
-  private onVideoEnded(): void {
+  private onStop(): void {
     this._isPlaying = false;
     cancelAnimationFrame(this.animationId);
   }
