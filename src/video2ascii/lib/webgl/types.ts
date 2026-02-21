@@ -7,17 +7,6 @@ export interface AsciiStats {
   frameTime: number;
 }
 
-export interface GridDimensions {
-  cols: number;
-  rows: number;
-}
-
-export type UniformSetter = (
-  gl: WebGL2RenderingContext,
-  program: WebGLProgram,
-  locations: UniformLocations
-) => void;
-
 export interface UniformLocations {
   u_video: WebGLUniformLocation | null;
   u_asciiAtlas: WebGLUniformLocation | null;
@@ -42,62 +31,6 @@ export interface UniformLocations {
   u_audioSensitivity: WebGLUniformLocation | null;
 }
 
-export interface UseVideoToAsciiOptions {
-  fontSize?: number;
-  colored?: boolean;
-  blend?: number;
-  highlight?: number;
-  brightness?: number;
-  charset?: CharsetKey;
-  maxWidth?: number;
-  numColumns?: number;
-  enableSpacebarToggle?: boolean;
-  onStats?: (stats: AsciiStats) => void;
-}
-
-export interface UseAsciiMouseEffectOptions {
-  enabled?: boolean;
-  trailLength?: number;
-}
-
-export interface UseAsciiRippleOptions {
-  enabled?: boolean;
-  speed?: number;
-}
-
-export interface UseAsciiAudioOptions {
-  enabled?: boolean;
-  reactivity?: number;
-  sensitivity?: number;
-}
-
-export interface AsciiContext {
-  containerRef: React.RefObject<HTMLDivElement | null>;
-  videoRef: React.RefObject<HTMLVideoElement | null>;
-  canvasRef: React.RefObject<HTMLCanvasElement | null>;
-  glRef: React.RefObject<WebGL2RenderingContext | null>;
-  programRef: React.RefObject<WebGLProgram | null>;
-  uniformLocationsRef: React.RefObject<UniformLocations | null>;
-  registerUniformSetter: (id: string, setter: UniformSetter) => void;
-  unregisterUniformSetter: (id: string) => void;
-  dimensions: GridDimensions;
-  stats: AsciiStats;
-  isReady: boolean;
-  isPlaying: boolean;
-  play: () => void;
-  pause: () => void;
-  toggle: () => void;
-}
-
-export interface MouseEffectHandlers {
-  onMouseMove: (e: React.MouseEvent<HTMLDivElement>) => void;
-  onMouseLeave: () => void;
-}
-
-export interface RippleHandlers {
-  onClick: (e: React.MouseEvent<HTMLDivElement>) => void;
-}
-
 export interface VideoToAsciiProps {
   src: string;
   numColumns?: number;
@@ -118,26 +51,4 @@ export interface VideoToAsciiProps {
   showStats?: boolean;
   className?: string;
   onRenderer?: (renderer: import("../../core/AsciiRenderer").AsciiRenderer | null) => void;
-}
-
-export interface VideoToAsciiWebGLProps extends VideoToAsciiProps {
-  showBenchmark?: boolean;
-  muted?: boolean;
-}
-
-export interface BenchmarkStats extends AsciiStats {
-  gpuTime: number;
-}
-
-export interface WebGLResources {
-  gl: WebGL2RenderingContext;
-  program: WebGLProgram;
-  videoTexture: WebGLTexture;
-  atlasTexture: WebGLTexture;
-}
-
-export interface Ripple {
-  x: number;
-  y: number;
-  startTime: number;
 }

@@ -46,7 +46,3 @@ export const DEFAULT_CHARSET: CharsetKey = "code";
 export function getCharArray(charset: CharsetKey): string[] {
   return [...ASCII_CHARSETS[charset].chars];
 }
-
-export function getCharsetName(charset: CharsetKey): string {
-  return ASCII_CHARSETS[charset].name;
-}

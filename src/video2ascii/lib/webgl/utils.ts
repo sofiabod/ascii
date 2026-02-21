@@ -4,10 +4,7 @@ export function compileShader(
   type: number
 ): WebGLShader | null {
   const shader = gl.createShader(type);
-  if (!shader) {
-    console.error("Failed to create shader");
-    return null;
-  }
+  if (!shader) return null;
 
   gl.shaderSource(shader, source);
   gl.compileShader(shader);
@@ -27,10 +24,7 @@ export function createProgram(
   fragmentShader: WebGLShader
 ): WebGLProgram | null {
   const program = gl.createProgram();
-  if (!program) {
-    console.error("Failed to create program");
-    return null;
-  }
+  if (!program) return null;
 
   gl.attachShader(program, vertexShader);
   gl.attachShader(program, fragmentShader);
@@ -50,15 +44,13 @@ export function createFullscreenQuad(
   program: WebGLProgram
 ): void {
   const positions = new Float32Array([
-    -1, -1,
-     1, -1,
-    -1,  1,
-    -1,  1,
-     1, -1,
-     1,  1,
+    -1, -1, 1, -1, -1, 1,
+    -1, 1, 1, -1, 1, 1,
   ]);
-
-  const texCoords = new Float32Array([0, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 0]);
+  const texCoords = new Float32Array([
+    0, 1, 1, 1, 0, 0,
+    0, 0, 1, 1, 1, 0,
+  ]);
 
   const posBuffer = gl.createBuffer();
   gl.bindBuffer(gl.ARRAY_BUFFER, posBuffer);
@@ -110,9 +102,7 @@ export function createAsciiAtlas(
   ctx.textBaseline = "middle";
 
   for (let i = 0; i < chars.length; i++) {
-    const x = i * charSize + charSize / 2;
-    const y = charSize / 2;
-    ctx.fillText(chars[i], x, y);
+    ctx.fillText(chars[i], i * charSize + charSize / 2, charSize / 2);
   }
 
   const texture = gl.createTexture();
@@ -128,38 +118,11 @@ export function createAsciiAtlas(
   return texture;
 }
 
-export type UniformSetter = {
-  set1f: (name: string, value: number) => void;
-  set2f: (name: string, x: number, y: number) => void;
-  set1i: (name: string, value: number) => void;
-};
-
-export function createUniformSetter(
-  gl: WebGL2RenderingContext,
-  program: WebGLProgram
-): UniformSetter {
-  const cache = new Map<string, WebGLUniformLocation | null>();
-
-  const getLocation = (name: string) => {
-    if (!cache.has(name)) {
-      cache.set(name, gl.getUniformLocation(program, name));
-    }
-    return cache.get(name)!;
-  };
-
-  return {
-    set1f: (name, value) => gl.uniform1f(getLocation(name), value),
-    set2f: (name, x, y) => gl.uniform2f(getLocation(name), x, y),
-    set1i: (name, value) => gl.uniform1i(getLocation(name), value),
-  };
-}
-
 export function calculateGridDimensions(
   videoWidth: number,
   videoHeight: number,
   cols: number
 ): { cols: number; rows: number } {
-  const aspectRatio = videoWidth / videoHeight;
-  const rows = Math.round(cols / aspectRatio / 2);
+  const rows = Math.round(cols / (videoWidth / videoHeight) / 2);
   return { cols, rows };
 }
