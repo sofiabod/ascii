@@ -531,7 +531,14 @@ export class AsciiRenderer {
     if (!this.opts.enableMouse) return;
 
     const elapsed = performance.now() - this.lastMoveTime;
-    const glow = elapsed < 200 ? 1 : Math.max(0, 1 - (elapsed - 200) / 500);
+    const glow = elapsed < 1000 ? 1.0 : Math.max(0, 1 - (elapsed - 1000) / 500);
+
+    if (glow <= 0) {
+      gl.uniform2f(u.u_mouse, -1.0, -1.0);
+      gl.uniform1f(u.u_mouseRadius, 0.0);
+      gl.uniform1i(u.u_trailLength, 0);
+      return;
+    }
 
     gl.uniform2f(u.u_mouse, this.mouse.x, this.mouse.y);
     gl.uniform1f(u.u_mouseRadius, glow);

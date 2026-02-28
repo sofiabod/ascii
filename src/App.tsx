@@ -4,6 +4,106 @@ import type { AsciiRenderer } from "./video2ascii";
 import "./App.css";
 
 const DEMO_VIDEO = "/demo.mp4";
+const HISTORY_KEY = "ascii-history";
+const MAX_HISTORY = 20;
+
+interface HistoryEntry {
+  id: string;
+  name: string;
+  type: "sample" | "upload";
+  sampleUrl: string | null;
+  createdAt: number;
+}
+
+// IndexedDB helpers
+
+function openDb(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open("ascii-db", 1);
+    req.onupgradeneeded = () => {
+      req.result.createObjectStore("videos", { keyPath: "id" });
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+function saveBlob(id: string, blob: Blob): Promise<void> {
+  return openDb().then(
+    (db) =>
+      new Promise((resolve, reject) => {
+        const tx = db.transaction("videos", "readwrite");
+        tx.objectStore("videos").put({ id, blob });
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      })
+  );
+}
+
+function loadBlob(id: string): Promise<Blob | null> {
+  return openDb().then(
+    (db) =>
+      new Promise((resolve, reject) => {
+        const tx = db.transaction("videos", "readonly");
+        const req = tx.objectStore("videos").get(id);
+        req.onsuccess = () => resolve(req.result?.blob ?? null);
+        req.onerror = () => reject(req.error);
+      })
+  );
+}
+
+function deleteBlob(id: string): Promise<void> {
+  return openDb().then(
+    (db) =>
+      new Promise((resolve, reject) => {
+        const tx = db.transaction("videos", "readwrite");
+        tx.objectStore("videos").delete(id);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      })
+  );
+}
+
+function clearBlobs(): Promise<void> {
+  return openDb().then(
+    (db) =>
+      new Promise((resolve, reject) => {
+        const tx = db.transaction("videos", "readwrite");
+        tx.objectStore("videos").clear();
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      })
+  );
+}
+
+function loadHistory(): HistoryEntry[] {
+  try {
+    return JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
+  } catch {
+    return [];
+  }
+}
+
+function saveHistory(entries: HistoryEntry[]) {
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(entries));
+}
+
+function addHistoryEntry(entry: HistoryEntry, prev: HistoryEntry[]): HistoryEntry[] {
+  const filtered = prev.filter((e) => e.id !== entry.id);
+  return [entry, ...filtered].slice(0, MAX_HISTORY);
+}
+
+function relativeTime(ts: number): string {
+  const diff = Date.now() - ts;
+  const s = Math.floor(diff / 1000);
+  if (s < 60) return "just now";
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  return `${d}d ago`;
+}
 
 function imageToWebm(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -54,6 +154,16 @@ function CopyButton({ getText }: { getText: () => string }) {
   );
 }
 
+function BackButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button className="back-btn" onClick={onClick} aria-label="Back">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="15 18 9 12 15 6" />
+      </svg>
+    </button>
+  );
+}
+
 function CodeBlock({ label, code }: { label: string; code: string }) {
   return (
     <div className="code-block">
@@ -70,17 +180,78 @@ function App() {
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [fileName, setFileName] = useState("video.mp4");
   const [isDragging, setIsDragging] = useState(false);
+  const [history, setHistory] = useState<HistoryEntry[]>(loadHistory);
   const rendererRef = useRef<AsciiRenderer | null>(null);
+
+  const pushHistory = (entry: HistoryEntry) => {
+    setHistory((prev) => {
+      const next = addHistoryEntry(entry, prev);
+      saveHistory(next);
+      return next;
+    });
+  };
 
   const processFile = async (file: File) => {
     if (videoUrl) URL.revokeObjectURL(videoUrl);
     setFileName(file.name);
 
+    const id = crypto.randomUUID();
+
     if (file.type.startsWith("image/")) {
-      setVideoUrl(await imageToWebm(file));
+      const url = await imageToWebm(file);
+      setVideoUrl(url);
+      // store the original image file for reopening
+      await saveBlob(id, file);
+      pushHistory({ id, name: file.name, type: "upload", sampleUrl: null, createdAt: Date.now() });
     } else if (file.type.startsWith("video/")) {
       setVideoUrl(URL.createObjectURL(file));
+      await saveBlob(id, file);
+      pushHistory({ id, name: file.name, type: "upload", sampleUrl: null, createdAt: Date.now() });
     }
+  };
+
+  const openSample = (url: string) => {
+    const name = url.split("/").pop()?.replace(".mp4", "") ?? url;
+    setVideoUrl(url);
+    setFileName(name + ".mp4");
+    pushHistory({ id: url, name, type: "sample", sampleUrl: url, createdAt: Date.now() });
+  };
+
+  const openHistoryEntry = async (entry: HistoryEntry) => {
+    if (entry.type === "sample" && entry.sampleUrl) {
+      setVideoUrl(entry.sampleUrl);
+      setFileName(entry.name + ".mp4");
+      return;
+    }
+    const blob = await loadBlob(entry.id);
+    if (!blob) {
+      // blob was cleared — remove stale entry
+      removeHistoryEntry(entry.id);
+      return;
+    }
+    setVideoUrl(URL.createObjectURL(blob));
+    setFileName(entry.name);
+  };
+
+  const removeHistoryEntry = (id: string) => {
+    setHistory((prev) => {
+      const next = prev.filter((e) => e.id !== id);
+      saveHistory(next);
+      return next;
+    });
+    deleteBlob(id);
+  };
+
+  const clearAllHistory = () => {
+    setHistory([]);
+    saveHistory([]);
+    clearBlobs();
+  };
+
+  const goBack = () => {
+    if (videoUrl && videoUrl.startsWith("blob:")) URL.revokeObjectURL(videoUrl);
+    setVideoUrl(null);
+    rendererRef.current = null;
   };
 
   const onDrop = useCallback((e: React.DragEvent) => {
@@ -97,11 +268,11 @@ function App() {
           <div className="landing-demo">
             <Video2Ascii
               src={DEMO_VIDEO}
-              numColumns={80}
+              numColumns={90}
               charset="code"
               highlight={30}
               brightness={2.0}
-              trailLength={18}
+              trailLength={5}
             />
           </div>
           <div className="landing-info">
@@ -136,6 +307,42 @@ function App() {
               </label>
               <span className="drop-hint">or drop a file here</span>
             </div>
+            <div className="samples">
+              <span className="samples-label">or try a sample</span>
+              <div className="samples-grid">
+                <button className="sample-card" onClick={() => openSample("/samples/city.mp4")}>
+                  <div className="sample-thumb" />
+                  <span className="sample-name">city</span>
+                </button>
+                <button className="sample-card" onClick={() => openSample("/samples/nature.mp4")}>
+                  <div className="sample-thumb" />
+                  <span className="sample-name">nature</span>
+                </button>
+                <button className="sample-card" onClick={() => openSample("/samples/abstract.mp4")}>
+                  <div className="sample-thumb" />
+                  <span className="sample-name">abstract</span>
+                </button>
+              </div>
+            </div>
+            {history.length > 0 && (
+              <div className="history">
+                <div className="history-header">
+                  <span className="history-label">history</span>
+                  <button className="history-clear" onClick={clearAllHistory}>clear</button>
+                </div>
+                <div className="history-list">
+                  {history.map((entry) => (
+                    <div className="history-row" key={entry.id}>
+                      <button className="history-name" onClick={() => openHistoryEntry(entry)}>
+                        {entry.name}
+                      </button>
+                      <span className="history-time">{relativeTime(entry.createdAt)}</span>
+                      <button className="history-remove" onClick={() => removeHistoryEntry(entry.id)}>×</button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </main>
       </div>
@@ -145,6 +352,9 @@ function App() {
   return (
     <div className="app">
       <main className="player-page">
+        <nav className="player-nav">
+          <BackButton onClick={goBack} />
+        </nav>
         <div className="player-frame">
           <Video2Ascii
             src={videoUrl}
@@ -152,7 +362,7 @@ function App() {
             charset="code"
             highlight={30}
             brightness={2.0}
-            trailLength={18}
+            trailLength={5}
             onRenderer={(r) => { rendererRef.current = r; }}
           />
         </div>
@@ -167,6 +377,7 @@ function App() {
             build the library with <code>npm run build:lib</code> to
             get <code>ascii-renderer.umd.js</code> and <code>ascii-renderer.es.js</code>,
             then include one of them alongside your video file.
+            the video must be served from your site, local file paths won't work.
           </p>
           <CodeBlock label="Script Tag (UMD)" code={snippet("umd", fileName)} />
           <CodeBlock label="ES Module" code={snippet("esm", fileName)} />

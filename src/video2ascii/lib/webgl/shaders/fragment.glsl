@@ -47,12 +47,14 @@ void main() {
   float brightness = mix(baseBrightness, audioModulated, u_audioReactivity);
 
   float cursorGlow = 0.0;
-  float falloff = 9.0;
+  float radius = 7.0;
 
+  float aspect = u_charSize.x / u_charSize.y;
   vec2 mouseCell = floor(u_mouse * u_gridSize);
-  float cellDist = length(thisCell - mouseCell);
+  vec2 diff = (thisCell - mouseCell) * vec2(aspect, 1.0);
+  float cellDist = length(diff);
   if (u_mouse.x >= 0.0) {
-    cursorGlow = exp(-cellDist * cellDist / (falloff * falloff));
+    cursorGlow = smoothstep(radius, radius * 0.3, cellDist);
   }
 
   for (int i = 0; i < 18; i++) {
@@ -61,11 +63,11 @@ void main() {
     if (trailPos.x < 0.0) continue;
 
     vec2 trailCell = floor(trailPos * u_gridSize);
-    float trailDist = length(thisCell - trailCell);
-    float trailFalloff = falloff * 0.7;
+    vec2 tDiff = (thisCell - trailCell) * vec2(aspect, 1.0);
+    float trailDist = length(tDiff);
+    float trailR = radius * 0.7;
 
-    float fade = 1.0 - float(i) / float(u_trailLength);
-    cursorGlow = max(cursorGlow, exp(-trailDist * trailDist / (trailFalloff * trailFalloff)) * fade);
+    cursorGlow = max(cursorGlow, smoothstep(trailR, trailR * 0.3, trailDist));
   }
 
   float adjustedBrightness = pow(brightness, 1.0 / u_brightness);
@@ -84,6 +86,8 @@ void main() {
   vec2 atlasCoord = vec2(atlasX + cellPos.x / u_numChars, cellPos.y);
   vec4 charColor = texture(u_asciiAtlas, atlasCoord);
 
+  float glow = cursorGlow * u_mouseRadius;
+
   vec3 baseColor;
   if (u_colored) {
     baseColor = videoColor.rgb;
@@ -96,11 +100,10 @@ void main() {
   vec3 textColor = baseColor * 1.2;
   vec3 finalColor = mix(bgColor, textColor, charColor.r);
 
-  float glow = cursorGlow * u_mouseRadius;
-  finalColor = finalColor * (1.0 + glow * 14.0);
-  float peak = max(max(finalColor.r, finalColor.g), finalColor.b);
-  if (peak > 1.0) finalColor /= peak;
-  finalColor = mix(finalColor, vec3(1.0), glow * glow * 0.6);
+  vec3 litBg = baseColor * 3.0;
+  vec3 litText = baseColor * 8.0;
+  vec3 litColor = mix(litBg, litText, charColor.r);
+  finalColor = mix(finalColor, litColor, glow);
 
   vec3 blendedColor = mix(finalColor, videoColor.rgb, u_blend);
 
