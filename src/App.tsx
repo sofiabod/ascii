@@ -111,14 +111,10 @@ function App() {
             </p>
             <div className="landing-description">
               <p>
-                a webgl-powered ascii renderer that converts any video into
-                real-time character art. upload a video or image, get a live
-                ascii version with cursor-reactive glow and trail effects.
-              </p>
-              <p>
-                each pixel's brightness is mapped to a character in real time,
-                all hardware-accelerated. ships as a standalone library you can
-                drop into any site.
+                converts video or images into ascii art using webgl.
+                divides each frame into a grid of cells, maps cell
+                brightness to characters, and renders them in real time
+                with cursor glow and trail effects.
               </p>
             </div>
             <div

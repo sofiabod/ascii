@@ -47,7 +47,7 @@ void main() {
   float brightness = mix(baseBrightness, audioModulated, u_audioReactivity);
 
   float cursorGlow = 0.0;
-  float falloff = 7.0;
+  float falloff = 9.0;
 
   vec2 mouseCell = floor(u_mouse * u_gridSize);
   float cellDist = length(thisCell - mouseCell);
@@ -100,7 +100,7 @@ void main() {
   finalColor = finalColor * (1.0 + glow * 14.0);
   float peak = max(max(finalColor.r, finalColor.g), finalColor.b);
   if (peak > 1.0) finalColor /= peak;
-  finalColor = mix(finalColor, vec3(1.0), glow * glow * 0.4);
+  finalColor = mix(finalColor, vec3(1.0), glow * glow * 0.6);
 
   vec3 blendedColor = mix(finalColor, videoColor.rgb, u_blend);
 
