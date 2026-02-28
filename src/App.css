@@ -235,12 +235,23 @@
 
 .player-page {
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 4rem 1.5rem 0;
   width: 100%;
-  max-width: 800px;
+  max-width: 1500px;
+  margin: 0 auto;
+  align-items: flex-start;
+  padding: 0 4rem;
+  padding-top: 25vh;
   box-sizing: border-box;
+}
+
+.player-left {
+  flex: 1;
+  min-width: 0;
+}
+
+.player-right {
+  flex: 0 0 325px;
+  padding-left: 2.5rem;
 }
 
 .player-nav {

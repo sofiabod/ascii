@@ -378,35 +378,37 @@ function App() {
   return (
     <div className="app">
       <main className="player-page">
-        <nav className="player-nav">
-          <BackButton onClick={goBack} />
-        </nav>
-        <div className="player-frame">
-          <Video2Ascii
-            src={videoUrl}
-            numColumns={90}
-            charset="code"
-            highlight={30}
-            brightness={2.0}
-            trailLength={5}
-            onRenderer={(r) => { rendererRef.current = r; }}
-          />
+        <div className="player-left">
+          <nav className="player-nav">
+            <BackButton onClick={goBack} />
+          </nav>
+          <div className="player-frame">
+            <Video2Ascii
+              src={videoUrl}
+              numColumns={90}
+              charset="code"
+              highlight={30}
+              brightness={2.0}
+              trailLength={5}
+              onRenderer={(r) => { rendererRef.current = r; }}
+            />
+          </div>
+          <div className="action-bar">
+            <CopyButton getText={() => rendererRef.current?.captureText() ?? ""} />
+          </div>
         </div>
-
-        <div className="action-bar">
-          <CopyButton getText={() => rendererRef.current?.captureText() ?? ""} />
-        </div>
-
-        <div className="code-section">
-          <h2 className="code-section-title">use it on your site</h2>
-          <p className="code-section-note">
-            build the library with <code>npm run build:lib</code> to
-            get <code>ascii-renderer.umd.js</code> and <code>ascii-renderer.es.js</code>,
-            then include one of them alongside your video file.
-            the video must be served from your site, local file paths won't work.
-          </p>
-          <CodeBlock label="Script Tag (UMD)" code={snippet("umd", fileName)} />
-          <CodeBlock label="ES Module" code={snippet("esm", fileName)} />
+        <div className="player-right">
+          <div className="code-section">
+            <h2 className="code-section-title">use it on your site</h2>
+            <p className="code-section-note">
+              build the library with <code>npm run build:lib</code> to
+              get <code>ascii-renderer.umd.js</code> and <code>ascii-renderer.es.js</code>,
+              then include one of them alongside your video file.
+              the video must be served from your site, local file paths won't work.
+            </p>
+            <CodeBlock label="Script Tag (UMD)" code={snippet("umd", fileName)} />
+            <CodeBlock label="ES Module" code={snippet("esm", fileName)} />
+          </div>
         </div>
       </main>
     </div>
