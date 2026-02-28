@@ -1,10 +1,11 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { Video2Ascii } from "./video2ascii";
 import type { AsciiRenderer } from "./video2ascii";
 import "./App.css";
 
 const DEMO_VIDEO = "/demo.mp4";
 const HISTORY_KEY = "ascii-history";
+const ACTIVE_KEY = "ascii-active";
 const MAX_HISTORY = 20;
 
 interface HistoryEntry {
@@ -183,6 +184,27 @@ function App() {
   const [history, setHistory] = useState<HistoryEntry[]>(loadHistory);
   const rendererRef = useRef<AsciiRenderer | null>(null);
 
+  // restore active video on mount (survives refresh)
+  useEffect(() => {
+    const activeId = sessionStorage.getItem(ACTIVE_KEY);
+    if (!activeId) return;
+    const entry = loadHistory().find((e) => e.id === activeId);
+    if (!entry) { sessionStorage.removeItem(ACTIVE_KEY); return; }
+    if (entry.type === "sample" && entry.sampleUrl) {
+      setVideoUrl(entry.sampleUrl);
+      setFileName(entry.name + ".mp4");
+    } else {
+      loadBlob(entry.id).then((blob) => {
+        if (blob) {
+          setVideoUrl(URL.createObjectURL(blob));
+          setFileName(entry.name);
+        } else {
+          sessionStorage.removeItem(ACTIVE_KEY);
+        }
+      });
+    }
+  }, []);
+
   const pushHistory = (entry: HistoryEntry) => {
     setHistory((prev) => {
       const next = addHistoryEntry(entry, prev);
@@ -200,12 +222,13 @@ function App() {
     if (file.type.startsWith("image/")) {
       const url = await imageToWebm(file);
       setVideoUrl(url);
-      // store the original image file for reopening
       await saveBlob(id, file);
+      sessionStorage.setItem(ACTIVE_KEY, id);
       pushHistory({ id, name: file.name, type: "upload", sampleUrl: null, createdAt: Date.now() });
     } else if (file.type.startsWith("video/")) {
       setVideoUrl(URL.createObjectURL(file));
       await saveBlob(id, file);
+      sessionStorage.setItem(ACTIVE_KEY, id);
       pushHistory({ id, name: file.name, type: "upload", sampleUrl: null, createdAt: Date.now() });
     }
   };
@@ -214,6 +237,7 @@ function App() {
     const name = url.split("/").pop()?.replace(".mp4", "") ?? url;
     setVideoUrl(url);
     setFileName(name + ".mp4");
+    sessionStorage.setItem(ACTIVE_KEY, url);
     pushHistory({ id: url, name, type: "sample", sampleUrl: url, createdAt: Date.now() });
   };
 
@@ -221,16 +245,17 @@ function App() {
     if (entry.type === "sample" && entry.sampleUrl) {
       setVideoUrl(entry.sampleUrl);
       setFileName(entry.name + ".mp4");
+      sessionStorage.setItem(ACTIVE_KEY, entry.id);
       return;
     }
     const blob = await loadBlob(entry.id);
     if (!blob) {
-      // blob was cleared — remove stale entry
       removeHistoryEntry(entry.id);
       return;
     }
     setVideoUrl(URL.createObjectURL(blob));
     setFileName(entry.name);
+    sessionStorage.setItem(ACTIVE_KEY, entry.id);
   };
 
   const removeHistoryEntry = (id: string) => {
@@ -252,6 +277,7 @@ function App() {
     if (videoUrl && videoUrl.startsWith("blob:")) URL.revokeObjectURL(videoUrl);
     setVideoUrl(null);
     rendererRef.current = null;
+    sessionStorage.removeItem(ACTIVE_KEY);
   };
 
   const onDrop = useCallback((e: React.DragEvent) => {
