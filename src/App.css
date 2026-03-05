@@ -15,7 +15,7 @@
   min-height: 100vh;
   align-items: flex-start;
   padding: 0 4rem;
-  padding-top: 25vh;
+  padding-top: 18vh;
 }
 
 .landing-demo {
@@ -312,6 +312,7 @@
 .copy-icon:hover {
   color: #ddd;
 }
+
 
 .copy-icon svg {
   position: absolute;
