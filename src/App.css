@@ -12,7 +12,7 @@
   width: 100%;
   max-width: 1500px;
   margin: 0 auto;
-  min-height: 100vh;
+  flex: 1;
   align-items: flex-start;
   padding: 0 4rem;
   padding-top: 18vh;
@@ -23,7 +23,7 @@
   min-width: 0;
   overflow: hidden;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: flex-end;
 }
 
@@ -151,9 +151,22 @@
 }
 
 .sample-thumb {
-  width: 100px;
-  height: 60px;
+  width: 120px;
+  height: 75px;
   background: #0a0a0a;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.sample-thumb .video-to-ascii {
+  width: 100%;
+  height: 100%;
+}
+
+.sample-thumb canvas {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover;
 }
 
 .generate-btn {
@@ -480,5 +493,33 @@
 
 .history-remove:hover {
   color: #aaa;
+}
+
+.site-footer {
+  width: 100%;
+  padding: 0.75rem 0;
+  text-align: center;
+  font-family: 'Alphalyrae', sans-serif;
+  font-size: 0.8rem;
+  color: #444;
+  margin-top: auto;
+}
+
+.site-footer a {
+  color: #888;
+  text-decoration: none;
+  cursor: pointer;
+  background-image: linear-gradient(#888, #888);
+  background-size: 0% 1px;
+  background-position: left bottom;
+  background-repeat: no-repeat;
+  transition: background-size 0.4s ease, color 0.2s;
+  padding-bottom: 2px;
+}
+
+.site-footer a:hover {
+  color: #fff;
+  background-image: linear-gradient(#fff, #fff);
+  background-size: 100% 1px;
 }
 

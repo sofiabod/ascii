@@ -187,6 +187,14 @@ function CodeBlock({ label, code }: { label: string; code: string }) {
   );
 }
 
+function Footer() {
+  return (
+    <footer className="site-footer">
+      Made with 🤍 by <a href="https://sofiabodnar.com/" target="_blank" rel="noopener noreferrer">Sofia Bodnar</a>
+    </footer>
+  );
+}
+
 function App() {
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [fileName, setFileName] = useState("video.mp4");
@@ -346,17 +354,50 @@ function App() {
             <div className="samples">
               <span className="samples-label">or try a sample</span>
               <div className="samples-grid">
-                <button className="sample-card" onClick={() => openSample("/samples/city.mp4")}>
-                  <div className="sample-thumb" />
-                  <span className="sample-name">city</span>
+                <button className="sample-card" onClick={() => openSample("/samples/v1.mp4")}>
+                  <div className="sample-thumb">
+                    <Video2Ascii
+                      src="/samples/v1.mp4"
+                      numColumns={20}
+                      charset="code"
+                      highlight={30}
+                      brightness={2.0}
+                      trailLength={5}
+                      enableMouse={false}
+                      enableSpacebarToggle={false}
+                    />
+                  </div>
+                  <span className="sample-name">v1</span>
                 </button>
-                <button className="sample-card" onClick={() => openSample("/samples/nature.mp4")}>
-                  <div className="sample-thumb" />
-                  <span className="sample-name">nature</span>
+                <button className="sample-card" onClick={() => openSample("/samples/v2.mp4")}>
+                  <div className="sample-thumb">
+                    <Video2Ascii
+                      src="/samples/v2.mp4"
+                      numColumns={20}
+                      charset="code"
+                      highlight={30}
+                      brightness={2.0}
+                      trailLength={5}
+                      enableMouse={false}
+                      enableSpacebarToggle={false}
+                    />
+                  </div>
+                  <span className="sample-name">v2</span>
                 </button>
-                <button className="sample-card" onClick={() => openSample("/samples/abstract.mp4")}>
-                  <div className="sample-thumb" />
-                  <span className="sample-name">abstract</span>
+                <button className="sample-card" onClick={() => openSample("/samples/v3.mp4")}>
+                  <div className="sample-thumb">
+                    <Video2Ascii
+                      src="/samples/v3.mp4"
+                      numColumns={20}
+                      charset="code"
+                      highlight={30}
+                      brightness={2.0}
+                      trailLength={5}
+                      enableMouse={false}
+                      enableSpacebarToggle={false}
+                    />
+                  </div>
+                  <span className="sample-name">v3</span>
                 </button>
               </div>
             </div>
@@ -381,6 +422,7 @@ function App() {
             )}
           </div>
         </main>
+        <Footer />
       </div>
     );
   }
@@ -421,6 +463,7 @@ function App() {
           </div>
         </div>
       </main>
+      <Footer />
     </div>
   );
 }

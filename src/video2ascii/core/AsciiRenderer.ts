@@ -147,6 +147,7 @@ export class AsciiRenderer {
     this.canvas = document.createElement("canvas");
     this.canvas.style.display = "block";
     this.canvas.style.maxWidth = "100%";
+    this.canvas.style.margin = "0 auto";
 
     this.video = document.createElement("video");
     Object.assign(this.video, {
@@ -177,12 +178,16 @@ export class AsciiRenderer {
 
     if (this.video.readyState >= 1) this.onMetadata();
     if (this.opts.enableMouse) this.addMouseListeners();
-    if (this.opts.enableRipple) this.container.addEventListener("click", this.handleClick);
+    if (this.opts.enableRipple) this.canvas.addEventListener("click", this.handleClick);
     if (this.opts.enableSpacebarToggle) window.addEventListener("keydown", this.handleKeyDown);
 
     if (this.opts.columns) {
+      let lastWidth = 0;
       this.resizeObserver = new ResizeObserver(() => {
         if (this.video.readyState < 1) return;
+        const w = this.container.clientWidth;
+        if (w === lastWidth) return;
+        lastWidth = w;
         const wasPlaying = !this.video.paused;
         if (this.initWebGL() && wasPlaying) requestAnimationFrame(() => this.render());
       });
@@ -242,8 +247,8 @@ export class AsciiRenderer {
     );
     this.toggleListener(
       options.enableRipple, this.opts.enableRipple,
-      () => this.container.addEventListener("click", this.handleClick),
-      () => this.container.removeEventListener("click", this.handleClick),
+      () => this.canvas.addEventListener("click", this.handleClick),
+      () => this.canvas.removeEventListener("click", this.handleClick),
       (v) => { this.opts.enableRipple = v; }
     );
     this.toggleListener(
@@ -283,7 +288,7 @@ export class AsciiRenderer {
     this.video.removeEventListener("play", this.handleAudioPlay);
 
     this.removeMouseListeners();
-    this.container.removeEventListener("click", this.handleClick);
+    this.canvas.removeEventListener("click", this.handleClick);
     window.removeEventListener("keydown", this.handleKeyDown);
 
     this.resizeObserver?.disconnect();
@@ -348,19 +353,24 @@ export class AsciiRenderer {
     const cols = this.opts.columns;
     const containerWidth = this.container.clientWidth || window.innerWidth;
 
-    let fontSize: number;
     let finalCols: number;
 
     if (cols) {
-      fontSize = containerWidth / (cols * CHAR_WIDTH_RATIO);
       finalCols = cols;
     } else {
-      fontSize = 10;
       finalCols = Math.floor(containerWidth / (10 * CHAR_WIDTH_RATIO));
     }
 
     const grid = calculateGridDimensions(this.video.videoWidth, this.video.videoHeight, finalCols);
     this._dimensions = grid;
+
+    // fontSize from width (fill container horizontally)
+    const fontSizeFromWidth = containerWidth / (finalCols * CHAR_WIDTH_RATIO);
+    // fontSize from height (fit within viewport)
+    const maxH = window.innerHeight * 0.85;
+    const fontSizeFromHeight = maxH / grid.rows;
+    // use whichever is smaller so canvas fits both dimensions
+    const fontSize = Math.min(fontSizeFromWidth, fontSizeFromHeight);
 
     const dpr = window.devicePixelRatio || 1;
     const charWidth = fontSize * CHAR_WIDTH_RATIO;
@@ -483,8 +493,8 @@ export class AsciiRenderer {
   };
 
   private addMouseListeners(): void {
-    this.container.addEventListener("mousemove", this.handleMouseMove);
-    this.container.addEventListener("mouseleave", this.handleMouseLeave);
+    this.canvas.addEventListener("mousemove", this.handleMouseMove);
+    this.canvas.addEventListener("mouseleave", this.handleMouseLeave);
 
     this.trailIntervalId = window.setInterval(() => {
       if (this.mouse.x < 0) return;
@@ -506,14 +516,14 @@ export class AsciiRenderer {
   }
 
   private removeMouseListeners(): void {
-    this.container.removeEventListener("mousemove", this.handleMouseMove);
-    this.container.removeEventListener("mouseleave", this.handleMouseLeave);
+    this.canvas.removeEventListener("mousemove", this.handleMouseMove);
+    this.canvas.removeEventListener("mouseleave", this.handleMouseLeave);
     clearInterval(this.trailIntervalId);
     this.trailIntervalId = 0;
   }
 
   private onMouseMove(e: MouseEvent): void {
-    const rect = this.container.getBoundingClientRect();
+    const rect = this.canvas.getBoundingClientRect();
     this.mouse = {
       x: (e.clientX - rect.left) / rect.width,
       y: (e.clientY - rect.top) / rect.height,
@@ -554,7 +564,7 @@ export class AsciiRenderer {
 
   private onClick(e: MouseEvent): void {
     if (!this.opts.enableRipple) return;
-    const rect = this.container.getBoundingClientRect();
+    const rect = this.canvas.getBoundingClientRect();
     this.ripples.unshift({
       x: (e.clientX - rect.left) / rect.width,
       y: (e.clientY - rect.top) / rect.height,
