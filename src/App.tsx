@@ -3,7 +3,7 @@ import { Video2Ascii } from "./video2ascii";
 import type { AsciiRenderer } from "./video2ascii";
 import "./App.css";
 
-const DEMO_VIDEO = "/demo.mp4";
+const DEMO_VIDEO = "/samples/v3.mp4";
 const HISTORY_KEY = "ascii-history";
 const ACTIVE_KEY = "ascii-active";
 const MAX_HISTORY = 20;
