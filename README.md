@@ -1,21 +1,23 @@
 # video to ascii
 
-converts video or images into real-time ASCII art using WebGL. Divides each frame into a grid of cells, maps cell brightness to characters, and renders them with cursor glow and trail effects.
+converts video  into real-time ascii art using webgl. divides each frame into a grid of cells, maps cell brightness to characters, and renders them with cursor glow and trail effects.
 
-inspired by [General Intuition](https://www.generalintuition.com/).
+inspired by [general intuition](https://www.generalintuition.com/).
 
-## Usage
+check it out at [intuitionart.ca](https://intuitionart.ca)
+
+## usage
 
 ```bash
 npm install
 npm run dev
 ```
 
-upload a video or image (or try a sample) and it renders as ASCII art in the browser. You can copy the ASCII text output or get embed code to use it on your own site.
+upload a video and it renders as ascii art in the browser. you can copy the ascii text output or get embed code to use it on your own site.
 
-## Library
+## library
 
-Build the standalone library for use outside this app:
+build the standalone library for use outside this app:
 
 ```bash
 npm run build:lib
@@ -38,7 +40,7 @@ this outputs `ascii-renderer.umd.js` and `ascii-renderer.es.js` to `dist/lib/`.
 </script>
 ```
 
-### ES Module
+### es module
 
 ```js
 import { AsciiRenderer } from './ascii-renderer.es.js';
@@ -53,4 +55,4 @@ new AsciiRenderer('#ascii', {
 
 ## stack
 
-React, TypeScript, Vite, WebGL
+react, typescript, vite, webgl
