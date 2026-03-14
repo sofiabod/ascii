@@ -110,6 +110,13 @@
   margin-left: 3rem;
 }
 
+.upload-error {
+  font-family: 'Manrope', sans-serif;
+  font-size: 0.8rem;
+  color: #ff6b6b;
+  margin-top: 0.5rem;
+}
+
 .samples {
   margin-top: 1.5rem;
   display: flex;
@@ -522,5 +529,67 @@
   color: #fff;
   background-image: linear-gradient(#fff, #fff);
   background-size: 100% 1px;
+}
+
+@media (max-width: 768px) {
+  .landing {
+    flex-direction: column;
+    padding: 0 1.25rem;
+    padding-top: 6vh;
+    align-items: flex-start;
+  }
+
+  .landing-demo {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .landing-demo .video-to-ascii {
+    width: 100%;
+  }
+
+  .landing-info {
+    flex: none;
+    width: 100%;
+    padding: 1.5rem 0 2rem;
+  }
+
+  .landing-title {
+    font-size: 2rem;
+  }
+
+  .drop-zone {
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .drop-hint {
+    margin-left: 1rem;
+  }
+
+  .samples-grid {
+    flex-wrap: wrap;
+  }
+
+  .sample-thumb {
+    width: 90px;
+    height: 56px;
+  }
+
+  .player-page {
+    flex-direction: column;
+    padding: 0 1.25rem;
+    padding-top: 4vh;
+  }
+
+  .player-left {
+    width: 100%;
+  }
+
+  .player-right {
+    flex: none;
+    width: 100%;
+    padding-left: 0;
+  }
 }
 
