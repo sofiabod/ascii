@@ -32,6 +32,7 @@ export interface AsciiRendererOptions {
   enableSpacebarToggle?: boolean;
   onStats?: (stats: AsciiStats) => void;
   onReady?: () => void;
+  onError?: (msg: string) => void;
 }
 
 const DEFAULTS = {
@@ -113,18 +114,25 @@ export class AsciiRenderer {
 
   private handleMouseMove: (e: MouseEvent) => void;
   private handleMouseLeave: () => void;
+  private handleTouchMove: (e: TouchEvent) => void;
+  private handleTouchEnd: () => void;
   private handleClick: (e: MouseEvent) => void;
   private handleKeyDown: (e: KeyboardEvent) => void;
   private handleMetadata: () => void;
   private handlePlay: () => void;
   private handleStop: () => void;
   private handleAudioPlay: () => void;
+  private handleVideoError: () => void;
+  private handleContextLost: (e: Event) => void;
+  private handleContextRestored: () => void;
+  private _onError?: (msg: string) => void;
 
   constructor(container: string | HTMLElement, options: AsciiRendererOptions) {
     this.container = typeof container === "string"
       ? document.querySelector<HTMLElement>(container) ?? (() => { throw new Error(`Container not found: ${container}`); })()
       : container;
 
+    this._onError = options.onError;
     this.opts = {
       colored: options.colored ?? DEFAULTS.colored,
       blend: options.blend ?? DEFAULTS.blend,
@@ -132,7 +140,7 @@ export class AsciiRenderer {
       brightness: options.brightness ?? DEFAULTS.brightness,
       charset: options.charset ?? DEFAULTS.charset,
       enableMouse: options.enableMouse ?? DEFAULTS.enableMouse,
-      trailLength: options.trailLength ?? DEFAULTS.trailLength,
+      trailLength: Math.min(options.trailLength ?? DEFAULTS.trailLength, MAX_TRAIL),
       enableRipple: options.enableRipple ?? DEFAULTS.enableRipple,
       rippleSpeed: options.rippleSpeed ?? DEFAULTS.rippleSpeed,
       audioEffect: options.audioEffect ?? DEFAULTS.audioEffect,
@@ -164,17 +172,37 @@ export class AsciiRenderer {
 
     this.handleMouseMove = this.onMouseMove.bind(this);
     this.handleMouseLeave = this.onMouseLeave.bind(this);
+    this.handleTouchMove = this.onTouchMove.bind(this);
+    this.handleTouchEnd = this.onMouseLeave.bind(this);
     this.handleClick = this.onClick.bind(this);
     this.handleKeyDown = this.onKeyDown.bind(this);
     this.handleMetadata = this.onMetadata.bind(this);
     this.handlePlay = this.onPlay.bind(this);
     this.handleStop = this.onStop.bind(this);
     this.handleAudioPlay = () => { if (this.opts.audioEffect > 0) this.connectAudio(); };
+    this.handleVideoError = () => {
+      const e = this.video.error;
+      const msg = e ? `Video error: ${e.message || "format not supported by this browser"}` : "Video failed to load";
+      this._onError?.(msg);
+    };
+    this.handleContextLost = (e: Event) => {
+      e.preventDefault();
+      cancelAnimationFrame(this.animationId);
+    };
+    this.handleContextRestored = () => {
+      if (this.video.readyState >= 1 && this.initWebGL() && !this.video.paused) {
+        requestAnimationFrame(this.render);
+      }
+    };
 
     this.video.addEventListener("loadedmetadata", this.handleMetadata);
     this.video.addEventListener("play", this.handlePlay);
     this.video.addEventListener("pause", this.handleStop);
     this.video.addEventListener("ended", this.handleStop);
+    this.video.addEventListener("error", this.handleVideoError);
+
+    this.canvas.addEventListener("webglcontextlost", this.handleContextLost);
+    this.canvas.addEventListener("webglcontextrestored", this.handleContextRestored);
 
     if (this.video.readyState >= 1) this.onMetadata();
     if (this.opts.enableMouse) this.addMouseListeners();
@@ -234,7 +262,7 @@ export class AsciiRenderer {
     if (options.colored !== undefined) this.opts.colored = options.colored;
     if (options.blend !== undefined) this.opts.blend = options.blend;
     if (options.highlight !== undefined) this.opts.highlight = options.highlight;
-    if (options.trailLength !== undefined) this.opts.trailLength = options.trailLength;
+    if (options.trailLength !== undefined) this.opts.trailLength = Math.min(options.trailLength, MAX_TRAIL);
     if (options.rippleSpeed !== undefined) this.opts.rippleSpeed = options.rippleSpeed;
     if (options.audioRange !== undefined) this.opts.audioRange = options.audioRange;
     if (options.onStats !== undefined) this.opts.onStats = options.onStats;
@@ -286,6 +314,9 @@ export class AsciiRenderer {
     this.video.removeEventListener("pause", this.handleStop);
     this.video.removeEventListener("ended", this.handleStop);
     this.video.removeEventListener("play", this.handleAudioPlay);
+    this.video.removeEventListener("error", this.handleVideoError);
+    this.canvas.removeEventListener("webglcontextlost", this.handleContextLost);
+    this.canvas.removeEventListener("webglcontextrestored", this.handleContextRestored);
 
     this.removeMouseListeners();
     this.canvas.removeEventListener("click", this.handleClick);
@@ -362,6 +393,7 @@ export class AsciiRenderer {
     }
 
     const grid = calculateGridDimensions(this.video.videoWidth, this.video.videoHeight, finalCols);
+    if (grid.cols <= 0 || grid.rows <= 0) return false;
     this._dimensions = grid;
 
     // fontSize from width (fill container horizontally)
@@ -382,7 +414,10 @@ export class AsciiRenderer {
     this.canvas.style.height = pxH + "px";
 
     const gl = this.canvas.getContext("webgl2", { antialias: false, preserveDrawingBuffer: false });
-    if (!gl) return false;
+    if (!gl) {
+      this._onError?.("WebGL2 is not supported by your browser. Please try Chrome, Firefox, or Edge.");
+      return false;
+    }
     this.gl = gl;
 
     const vs = compileShader(gl, VERTEX_SHADER, gl.VERTEX_SHADER);
@@ -453,7 +488,7 @@ export class AsciiRenderer {
 
   private render = (): void => {
     const { gl, program, uniforms: u, video } = this;
-    if (!gl || !program || !u || video.paused || video.ended) return;
+    if (!gl || !program || !u || video.paused || video.ended || gl.isContextLost()) return;
 
     const t0 = performance.now();
 
@@ -495,6 +530,8 @@ export class AsciiRenderer {
   private addMouseListeners(): void {
     this.canvas.addEventListener("mousemove", this.handleMouseMove);
     this.canvas.addEventListener("mouseleave", this.handleMouseLeave);
+    this.canvas.addEventListener("touchmove", this.handleTouchMove, { passive: false });
+    this.canvas.addEventListener("touchend", this.handleTouchEnd);
 
     this.trailIntervalId = window.setInterval(() => {
       if (this.mouse.x < 0) return;
@@ -518,6 +555,8 @@ export class AsciiRenderer {
   private removeMouseListeners(): void {
     this.canvas.removeEventListener("mousemove", this.handleMouseMove);
     this.canvas.removeEventListener("mouseleave", this.handleMouseLeave);
+    this.canvas.removeEventListener("touchmove", this.handleTouchMove);
+    this.canvas.removeEventListener("touchend", this.handleTouchEnd);
     clearInterval(this.trailIntervalId);
     this.trailIntervalId = 0;
   }
@@ -535,6 +574,18 @@ export class AsciiRenderer {
     this.mouse = { x: -1, y: -1 };
     this.trail = [];
     this.lastMoveTime = 0;
+  }
+
+  private onTouchMove(e: TouchEvent): void {
+    e.preventDefault();
+    const touch = e.touches[0];
+    if (!touch) return;
+    const rect = this.canvas.getBoundingClientRect();
+    this.mouse = {
+      x: (touch.clientX - rect.left) / rect.width,
+      y: (touch.clientY - rect.top) / rect.height,
+    };
+    this.lastMoveTime = performance.now();
   }
 
   private uploadMouseUniforms(gl: WebGL2RenderingContext, u: UniformLocations): void {

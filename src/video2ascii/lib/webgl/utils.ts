@@ -123,6 +123,7 @@ export function calculateGridDimensions(
   videoHeight: number,
   cols: number
 ): { cols: number; rows: number } {
-  const rows = Math.round(cols / (videoWidth / videoHeight) / 2);
+  if (videoWidth <= 0 || videoHeight <= 0 || cols <= 0) return { cols: 0, rows: 0 };
+  const rows = Math.max(1, Math.round(cols / (videoWidth / videoHeight) / 2));
   return { cols, rows };
 }

@@ -51,4 +51,5 @@ export interface VideoToAsciiProps {
   showStats?: boolean;
   className?: string;
   onRenderer?: (renderer: import("../../core/AsciiRenderer").AsciiRenderer | null) => void;
+  onError?: (msg: string) => void;
 }

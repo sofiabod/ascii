@@ -7,6 +7,7 @@ const DEMO_VIDEO = "/samples/v3.mp4";
 const HISTORY_KEY = "ascii-history";
 const ACTIVE_KEY = "ascii-active";
 const MAX_HISTORY = 20;
+const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500 MB
 
 interface HistoryEntry {
   id: string;
@@ -86,7 +87,16 @@ function loadHistory(): HistoryEntry[] {
 }
 
 function saveHistory(entries: HistoryEntry[]) {
-  localStorage.setItem(HISTORY_KEY, JSON.stringify(entries));
+  try {
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(entries));
+  } catch {
+    // localStorage full or unavailable — drop oldest entries and retry
+    try {
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(entries.slice(0, 5)));
+    } catch {
+      // still failing — give up silently
+    }
+  }
 }
 
 function addHistoryEntry(entry: HistoryEntry, prev: HistoryEntry[]): HistoryEntry[] {
@@ -200,6 +210,8 @@ function App() {
   const [fileName, setFileName] = useState("video.mp4");
   const [isDragging, setIsDragging] = useState(false);
   const [history, setHistory] = useState<HistoryEntry[]>(loadHistory);
+  const [error, setError] = useState<string | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
   const rendererRef = useRef<AsciiRenderer | null>(null);
 
   // restore active video on mount (survives refresh)
@@ -219,6 +231,8 @@ function App() {
         } else {
           sessionStorage.removeItem(ACTIVE_KEY);
         }
+      }).catch(() => {
+        sessionStorage.removeItem(ACTIVE_KEY);
       });
     }
   }, []);
@@ -232,22 +246,39 @@ function App() {
   };
 
   const processFile = async (file: File) => {
+    if (isProcessing) return;
+    setError(null);
+
+    if (file.size > MAX_FILE_SIZE) {
+      setError(`File too large (${(file.size / 1024 / 1024).toFixed(0)} MB). Max is 500 MB.`);
+      return;
+    }
+
+    if (!file.type.startsWith("image/") && !file.type.startsWith("video/")) {
+      setError("Unsupported file type. Please upload a video or image.");
+      return;
+    }
+
+    setIsProcessing(true);
     if (videoUrl) URL.revokeObjectURL(videoUrl);
     setFileName(file.name);
 
     const id = crypto.randomUUID();
 
-    if (file.type.startsWith("image/")) {
-      const url = await imageToWebm(file);
-      setVideoUrl(url);
-      await saveBlob(id, file);
+    try {
+      if (file.type.startsWith("image/")) {
+        const url = await imageToWebm(file);
+        setVideoUrl(url);
+      } else {
+        setVideoUrl(URL.createObjectURL(file));
+      }
+      await saveBlob(id, file).catch(() => {});
       sessionStorage.setItem(ACTIVE_KEY, id);
       pushHistory({ id, name: file.name, type: "upload", sampleUrl: null, createdAt: Date.now() });
-    } else if (file.type.startsWith("video/")) {
-      setVideoUrl(URL.createObjectURL(file));
-      await saveBlob(id, file);
-      sessionStorage.setItem(ACTIVE_KEY, id);
-      pushHistory({ id, name: file.name, type: "upload", sampleUrl: null, createdAt: Date.now() });
+    } catch {
+      setError("Failed to process file. The format may not be supported by your browser.");
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -266,14 +297,19 @@ function App() {
       sessionStorage.setItem(ACTIVE_KEY, entry.id);
       return;
     }
-    const blob = await loadBlob(entry.id);
-    if (!blob) {
+    try {
+      const blob = await loadBlob(entry.id);
+      if (!blob) {
+        removeHistoryEntry(entry.id);
+        return;
+      }
+      if (videoUrl && videoUrl.startsWith("blob:")) URL.revokeObjectURL(videoUrl);
+      setVideoUrl(URL.createObjectURL(blob));
+      setFileName(entry.name);
+      sessionStorage.setItem(ACTIVE_KEY, entry.id);
+    } catch {
       removeHistoryEntry(entry.id);
-      return;
     }
-    setVideoUrl(URL.createObjectURL(blob));
-    setFileName(entry.name);
-    sessionStorage.setItem(ACTIVE_KEY, entry.id);
   };
 
   const removeHistoryEntry = (id: string) => {
@@ -326,7 +362,7 @@ function App() {
             </p>
             <div className="landing-description">
               <p>
-                converts video or images into ascii art using webgl.
+                converts videos into ascii art using webgl.
                 divides each frame into a grid of cells, maps cell
                 brightness to characters, and renders them in real time
                 with cursor glow and trail effects.
@@ -351,6 +387,7 @@ function App() {
               </label>
               <span className="drop-hint">or drop a file here</span>
             </div>
+            {error && <p className="upload-error">{error}</p>}
             <div className="samples">
               <span className="samples-label">or try a sample</span>
               <div className="samples-grid">
@@ -443,6 +480,7 @@ function App() {
               brightness={2.0}
               trailLength={5}
               onRenderer={(r) => { rendererRef.current = r; }}
+              onError={(msg) => { setError(msg); goBack(); }}
             />
           </div>
           <div className="action-bar">

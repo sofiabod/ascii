@@ -24,6 +24,7 @@ export function Video2Ascii({
   showStats = false,
   className = "",
   onRenderer,
+  onError,
 }: VideoToAsciiProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<AsciiRenderer | null>(null);
@@ -59,6 +60,7 @@ export function Video2Ascii({
         setIsReady(true);
         setDimensions(renderer.dimensions);
       },
+      onError,
     });
 
     rendererRef.current = renderer;
