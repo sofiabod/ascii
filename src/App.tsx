@@ -270,7 +270,9 @@ function App() {
     if (videoUrl) URL.revokeObjectURL(videoUrl);
     setFileName(file.name);
 
-    const id = crypto.randomUUID();
+    const id = typeof crypto.randomUUID === "function"
+      ? crypto.randomUUID()
+      : Math.random().toString(36).slice(2) + Date.now().toString(36);
 
     try {
       if (file.type.startsWith("image/")) {

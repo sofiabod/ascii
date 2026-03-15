@@ -158,17 +158,14 @@ export class AsciiRenderer {
     this.canvas.style.margin = "0 auto";
 
     this.video = document.createElement("video");
-    Object.assign(this.video, {
-      src: options.videoSrc,
-      muted: this.opts.audioEffect === 0,
-      loop: true,
-      playsInline: true,
-      crossOrigin: "anonymous",
-      preload: "auto",
-      autoplay: true,
-    });
+    this.video.muted = this.opts.audioEffect === 0;
+    this.video.loop = true;
+    this.video.playsInline = true;
+    this.video.preload = "auto";
     this.video.setAttribute("playsinline", "");
     this.video.setAttribute("webkit-playsinline", "");
+    this.video.setAttribute("muted", "");
+    this.video.src = options.videoSrc;
     this.video.style.display = "none";
 
     this.container.appendChild(this.video);
@@ -232,7 +229,16 @@ export class AsciiRenderer {
     }
   }
 
-  play(): void { this.video.play().catch(() => {}); }
+  play(): void {
+    const attempt = () => {
+      this.video.play().catch(() => {
+        // Safari may block autoplay — retry once after a short delay
+        setTimeout(() => { this.video.play().catch(() => {}); }, 100);
+      });
+    };
+    if (this.video.readyState >= 2) attempt();
+    else this.video.addEventListener("canplay", attempt, { once: true });
+  }
   pause(): void { this.video.pause(); }
   toggle(): void { this.video.paused ? this.play() : this.pause(); }
 

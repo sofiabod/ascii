@@ -5,7 +5,7 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   build: {
-    target: ['es2020', 'safari14', 'firefox128', 'chrome90'],
+    target: ['es2020', 'safari15', 'firefox128', 'chrome90'],
   },
   server: {
     port: 5555,
