@@ -1,5 +1,8 @@
 # video to ascii
 
+![landing page](public/screenshots/landing.png)
+![player page](public/screenshots/player.png)
+
 converts video  into real-time ascii art using webgl. divides each frame into a grid of cells, maps cell brightness to characters, and renders them with cursor glow and trail effects.
 
 inspired by [general intuition](https://www.generalintuition.com/).
