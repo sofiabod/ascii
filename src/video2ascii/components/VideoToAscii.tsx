@@ -104,7 +104,7 @@ export function Video2Ascii({
   }, [isPlaying, autoPlay, isReady]);
 
   return (
-    <div className={`video-to-ascii ${className}`} style={{ position: "relative" }}>
+    <div className={`video-to-ascii ${className}`} style={{ position: "relative", minHeight: isReady ? undefined : 200 }}>
       {!isReady && (
         <div style={{
           position: "absolute",
