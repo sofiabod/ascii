@@ -104,7 +104,20 @@ export function Video2Ascii({
   }, [isPlaying, autoPlay, isReady]);
 
   return (
-    <div className={`video-to-ascii ${className}`}>
+    <div className={`video-to-ascii ${className}`} style={{ position: "relative" }}>
+      {!isReady && (
+        <div style={{
+          position: "absolute",
+          inset: 0,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "#000",
+          zIndex: 1,
+        }}>
+          <div className="ascii-spinner" />
+        </div>
+      )}
       <div ref={containerRef} style={{ overflow: "hidden", background: "#000", opacity: isReady ? 1 : 0, transition: "opacity 0.3s ease" }}>
         {showStats && isReady && (
           <div style={{
