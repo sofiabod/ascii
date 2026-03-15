@@ -15,7 +15,7 @@
   flex: 1;
   align-items: flex-start;
   padding: 0 4rem;
-  padding-top: 18vh;
+  padding-top: 15vh;
 }
 
 .landing-demo {
@@ -48,6 +48,7 @@
   color: #e8e8ec;
   margin: 0;
   letter-spacing: -0.02em;
+  line-height: 1;
 }
 
 .landing-subtitle {
@@ -261,7 +262,7 @@
   margin: 0 auto;
   align-items: flex-start;
   padding: 0 4rem;
-  padding-top: 25vh;
+  padding-top: 15vh;
   box-sizing: border-box;
 }
 

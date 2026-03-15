@@ -47,37 +47,43 @@ void main() {
   float brightness = mix(baseBrightness, audioModulated, u_audioReactivity);
 
   float cursorGlow = 0.0;
-  float radius = 7.0;
 
-  float aspect = u_charSize.x / u_charSize.y;
-  vec2 mouseCell = floor(u_mouse * u_gridSize);
-  vec2 diff = (thisCell - mouseCell) * vec2(aspect, 1.0);
-  float cellDist = length(diff);
-  if (u_mouse.x >= 0.0) {
-    cursorGlow = smoothstep(radius, radius * 0.3, cellDist);
-  }
+  if (u_mouseRadius > 0.0) {
+    float radius = 7.0;
+    float aspect = u_charSize.x / u_charSize.y;
+    vec2 mouseCell = floor(u_mouse * u_gridSize);
+    vec2 diff = (thisCell - mouseCell) * vec2(aspect, 1.0);
+    float cellDist = length(diff);
+    if (u_mouse.x >= 0.0) {
+      cursorGlow = smoothstep(radius, radius * 0.3, cellDist);
+    }
 
-  for (int i = 0; i < 18; i++) {
-    if (i >= u_trailLength) break;
-    vec2 trailPos = u_trail[i];
-    if (trailPos.x < 0.0) continue;
+    if (u_trailLength > 0) {
+      float trailR = radius * 0.7;
+      for (int i = 0; i < 18; i++) {
+        if (i >= u_trailLength) break;
+        vec2 trailPos = u_trail[i];
+        if (trailPos.x < 0.0) continue;
 
-    vec2 trailCell = floor(trailPos * u_gridSize);
-    vec2 tDiff = (thisCell - trailCell) * vec2(aspect, 1.0);
-    float trailDist = length(tDiff);
-    float trailR = radius * 0.7;
+        vec2 trailCell = floor(trailPos * u_gridSize);
+        vec2 tDiff = (thisCell - trailCell) * vec2(aspect, 1.0);
+        float trailDist = length(tDiff);
 
-    cursorGlow = max(cursorGlow, smoothstep(trailR, trailR * 0.3, trailDist));
+        cursorGlow = max(cursorGlow, smoothstep(trailR, trailR * 0.3, trailDist));
+      }
+    }
   }
 
   float adjustedBrightness = pow(brightness, 1.0 / u_brightness);
   adjustedBrightness = clamp(adjustedBrightness, 0.0, 1.0);
 
   float visibleGlow = cursorGlow * u_mouseRadius;
-  float cellId = dot(cellCoord, vec2(127.1, 311.7));
-  float wave = sin(u_time * 0.8 + cellId) * sin(u_time * 1.3 + cellId * 0.7);
-  float jitter = wave * 0.08 * (1.0 - visibleGlow);
-  adjustedBrightness = clamp(adjustedBrightness + jitter, 0.0, 1.0);
+  if (visibleGlow < 1.0) {
+    float cellId = dot(cellCoord, vec2(127.1, 311.7));
+    float wave = sin(u_time * 0.8 + cellId) * sin(u_time * 1.3 + cellId * 0.7);
+    float jitter = wave * 0.08 * (1.0 - visibleGlow);
+    adjustedBrightness = clamp(adjustedBrightness + jitter, 0.0, 1.0);
+  }
 
   float charIndex = floor(adjustedBrightness * (u_numChars - 0.001));
 

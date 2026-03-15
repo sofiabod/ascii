@@ -53,8 +53,7 @@ export function Video2Ascii({
       autoPlay,
       enableSpacebarToggle,
       onStats: (s) => {
-        setStats(s);
-        setDimensions(renderer.dimensions);
+        setStats((prev) => (prev.fps === s.fps && Math.abs(prev.frameTime - s.frameTime) < 0.1) ? prev : s);
       },
       onReady: () => {
         setIsReady(true);

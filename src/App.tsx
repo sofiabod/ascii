@@ -19,13 +19,20 @@ interface HistoryEntry {
 
 // IndexedDB helpers
 
+let cachedDb: IDBDatabase | null = null;
+
 function openDb(): Promise<IDBDatabase> {
+  if (cachedDb) return Promise.resolve(cachedDb);
   return new Promise((resolve, reject) => {
     const req = indexedDB.open("ascii-db", 1);
     req.onupgradeneeded = () => {
       req.result.createObjectStore("videos", { keyPath: "id" });
     };
-    req.onsuccess = () => resolve(req.result);
+    req.onsuccess = () => {
+      cachedDb = req.result;
+      cachedDb.onclose = () => { cachedDb = null; };
+      resolve(cachedDb);
+    };
     req.onerror = () => reject(req.error);
   });
 }
@@ -392,47 +399,20 @@ function App() {
               <span className="samples-label">or try a sample</span>
               <div className="samples-grid">
                 <button className="sample-card" onClick={() => openSample("/samples/v1.mp4")}>
-                  <div className="sample-thumb">
-                    <Video2Ascii
-                      src="/samples/v1.mp4"
-                      numColumns={20}
-                      charset="code"
-                      highlight={30}
-                      brightness={2.0}
-                      trailLength={5}
-                      enableMouse={false}
-                      enableSpacebarToggle={false}
-                    />
+                  <div className="sample-thumb sample-thumb-placeholder">
+                    <video src="/samples/v1.mp4" muted playsInline loop autoPlay style={{ width: "100%", height: "100%", objectFit: "cover", filter: "brightness(0.6)" }} />
                   </div>
                   <span className="sample-name">v1</span>
                 </button>
                 <button className="sample-card" onClick={() => openSample("/samples/v2.mp4")}>
-                  <div className="sample-thumb">
-                    <Video2Ascii
-                      src="/samples/v2.mp4"
-                      numColumns={20}
-                      charset="code"
-                      highlight={30}
-                      brightness={2.0}
-                      trailLength={5}
-                      enableMouse={false}
-                      enableSpacebarToggle={false}
-                    />
+                  <div className="sample-thumb sample-thumb-placeholder">
+                    <video src="/samples/v2.mp4" muted playsInline loop autoPlay style={{ width: "100%", height: "100%", objectFit: "cover", filter: "brightness(0.6)" }} />
                   </div>
                   <span className="sample-name">v2</span>
                 </button>
                 <button className="sample-card" onClick={() => openSample("/samples/v3.mp4")}>
-                  <div className="sample-thumb">
-                    <Video2Ascii
-                      src="/samples/v3.mp4"
-                      numColumns={20}
-                      charset="code"
-                      highlight={30}
-                      brightness={2.0}
-                      trailLength={5}
-                      enableMouse={false}
-                      enableSpacebarToggle={false}
-                    />
+                  <div className="sample-thumb sample-thumb-placeholder">
+                    <video src="/samples/v3.mp4" muted playsInline loop autoPlay style={{ width: "100%", height: "100%", objectFit: "cover", filter: "brightness(0.6)" }} />
                   </div>
                   <span className="sample-name">v3</span>
                 </button>
