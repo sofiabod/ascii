@@ -350,147 +350,143 @@ function App() {
     if (file) processFile(file);
   }, [videoUrl]);
 
-  if (!videoUrl) {
-    return (
-      <div className="app">
-        <main className="landing">
-          <div className="landing-demo">
-            <Video2Ascii
-              src={DEMO_VIDEO}
-              numColumns={90}
-              charset="code"
-              highlight={30}
-              brightness={2.0}
-              trailLength={5}
-            />
-          </div>
-          <div className="landing-info">
-            <h1 className="landing-title">video to ascii</h1>
-            <p className="landing-subtitle">
-              recreating <a href="https://www.generalintuition.com/" target="_blank" rel="noopener noreferrer" className="gi-link">general intuition</a> ascii art
-            </p>
-            <div className="landing-description">
-              <p>
-                converts videos into ascii art using webgl.
-                divides each frame into a grid of cells, maps cell
-                brightness to characters, and renders them in real time
-                with cursor glow and trail effects.
-              </p>
-            </div>
-            <div
-              className={`drop-zone${isDragging ? " drag-over" : ""}`}
-              onDrop={onDrop}
-              onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-              onDragLeave={() => setIsDragging(false)}
-            >
-              <label className="generate-btn">
-                <span className="edge-left" />
-                <span className="edge-right" />
-                generate
-                <input
-                  type="file"
-                  accept="video/*,image/*"
-                  hidden
-                  onChange={(e) => { const f = e.target.files?.[0]; if (f) processFile(f); }}
-                />
-              </label>
-              <span className="drop-hint">or drop a file here</span>
-            </div>
-            {error && <p className="upload-error">{error}</p>}
-            <div className="samples">
-              <span className="samples-label">or try a sample</span>
-              <div className="samples-grid">
-                <button className="sample-card" onClick={() => openSample("/samples/v1.mp4")}>
-                  <div className="sample-thumb">
-                    <Video2Ascii
-                      src="/samples/v1.mp4"
-                      numColumns={20}
-                      charset="code"
-                      highlight={30}
-                      brightness={2.0}
-                      trailLength={5}
-                      enableMouse={false}
-                      enableSpacebarToggle={false}
-                    />
-                  </div>
-                  <span className="sample-name">v1</span>
-                </button>
-                <button className="sample-card" onClick={() => openSample("/samples/v2.mp4")}>
-                  <div className="sample-thumb">
-                    <Video2Ascii
-                      src="/samples/v2.mp4"
-                      numColumns={20}
-                      charset="code"
-                      highlight={30}
-                      brightness={2.0}
-                      trailLength={5}
-                      enableMouse={false}
-                      enableSpacebarToggle={false}
-                    />
-                  </div>
-                  <span className="sample-name">v2</span>
-                </button>
-                <button className="sample-card" onClick={() => openSample("/samples/v3.mp4")}>
-                  <div className="sample-thumb">
-                    <Video2Ascii
-                      src="/samples/v3.mp4"
-                      numColumns={20}
-                      charset="code"
-                      highlight={30}
-                      brightness={2.0}
-                      trailLength={5}
-                      enableMouse={false}
-                      enableSpacebarToggle={false}
-                    />
-                  </div>
-                  <span className="sample-name">v3</span>
-                </button>
-              </div>
-            </div>
-            {history.length > 0 && (
-              <div className="history">
-                <div className="history-header">
-                  <span className="history-label">history</span>
-                  <button className="history-clear" onClick={clearAllHistory}>clear</button>
-                </div>
-                <div className="history-list">
-                  {history.map((entry) => (
-                    <div className="history-row" key={entry.id}>
-                      <button className="history-name" onClick={() => openHistoryEntry(entry)}>
-                        {entry.name}
-                      </button>
-                      <span className="history-time">{relativeTime(entry.createdAt)}</span>
-                      <button className="history-remove" onClick={() => removeHistoryEntry(entry.id)}>×</button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </main>
-        <Footer />
-      </div>
-    );
-  }
+  const showPlayer = !!videoUrl;
 
   return (
     <div className="app">
-      <main className="player-page">
+      <main className="landing" style={{ display: showPlayer ? "none" : undefined }}>
+        <div className="landing-demo">
+          <Video2Ascii
+            src={DEMO_VIDEO}
+            numColumns={90}
+            charset="code"
+            highlight={30}
+            brightness={2.0}
+            trailLength={5}
+          />
+        </div>
+        <div className="landing-info">
+          <h1 className="landing-title">video to ascii</h1>
+          <p className="landing-subtitle">
+            recreating <a href="https://www.generalintuition.com/" target="_blank" rel="noopener noreferrer" className="gi-link">general intuition</a> ascii art
+          </p>
+          <div className="landing-description">
+            <p>
+              converts videos into ascii art using webgl.
+              divides each frame into a grid of cells, maps cell
+              brightness to characters, and renders them in real time
+              with cursor glow and trail effects.
+            </p>
+          </div>
+          <div
+            className={`drop-zone${isDragging ? " drag-over" : ""}`}
+            onDrop={onDrop}
+            onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+            onDragLeave={() => setIsDragging(false)}
+          >
+            <label className="generate-btn">
+              <span className="edge-left" />
+              <span className="edge-right" />
+              generate
+              <input
+                type="file"
+                accept="video/*,image/*"
+                hidden
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) processFile(f); }}
+              />
+            </label>
+            <span className="drop-hint">or drop a file here</span>
+          </div>
+          {error && <p className="upload-error">{error}</p>}
+          <div className="samples">
+            <span className="samples-label">or try a sample</span>
+            <div className="samples-grid">
+              <button className="sample-card" onClick={() => openSample("/samples/v1.mp4")}>
+                <div className="sample-thumb">
+                  <Video2Ascii
+                    src="/samples/v1.mp4"
+                    numColumns={20}
+                    charset="code"
+                    highlight={30}
+                    brightness={2.0}
+                    trailLength={5}
+                    enableMouse={false}
+                    enableSpacebarToggle={false}
+                  />
+                </div>
+                <span className="sample-name">v1</span>
+              </button>
+              <button className="sample-card" onClick={() => openSample("/samples/v2.mp4")}>
+                <div className="sample-thumb">
+                  <Video2Ascii
+                    src="/samples/v2.mp4"
+                    numColumns={20}
+                    charset="code"
+                    highlight={30}
+                    brightness={2.0}
+                    trailLength={5}
+                    enableMouse={false}
+                    enableSpacebarToggle={false}
+                  />
+                </div>
+                <span className="sample-name">v2</span>
+              </button>
+              <button className="sample-card" onClick={() => openSample("/samples/v3.mp4")}>
+                <div className="sample-thumb">
+                  <Video2Ascii
+                    src="/samples/v3.mp4"
+                    numColumns={20}
+                    charset="code"
+                    highlight={30}
+                    brightness={2.0}
+                    trailLength={5}
+                    enableMouse={false}
+                    enableSpacebarToggle={false}
+                  />
+                </div>
+                <span className="sample-name">v3</span>
+              </button>
+            </div>
+          </div>
+          {history.length > 0 && (
+            <div className="history">
+              <div className="history-header">
+                <span className="history-label">history</span>
+                <button className="history-clear" onClick={clearAllHistory}>clear</button>
+              </div>
+              <div className="history-list">
+                {history.map((entry) => (
+                  <div className="history-row" key={entry.id}>
+                    <button className="history-name" onClick={() => openHistoryEntry(entry)}>
+                      {entry.name}
+                    </button>
+                    <span className="history-time">{relativeTime(entry.createdAt)}</span>
+                    <button className="history-remove" onClick={() => removeHistoryEntry(entry.id)}>×</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </main>
+      <main className="player-page" style={{ display: showPlayer ? undefined : "none" }}>
         <div className="player-left">
           <nav className="player-nav">
             <BackButton onClick={goBack} />
           </nav>
           <div className="player-frame">
-            <Video2Ascii
-              src={videoUrl}
-              numColumns={90}
-              charset="code"
-              highlight={30}
-              brightness={2.0}
-              trailLength={5}
-              onRenderer={(r) => { rendererRef.current = r; }}
-              onError={(msg) => { setError(msg); goBack(); }}
-            />
+            {videoUrl && (
+              <Video2Ascii
+                src={videoUrl}
+                numColumns={90}
+                charset="code"
+                highlight={30}
+                brightness={2.0}
+                trailLength={5}
+                onRenderer={(r) => { rendererRef.current = r; }}
+                onError={(msg) => { setError(msg); goBack(); }}
+              />
+            )}
           </div>
           <div className="action-bar">
             <CopyButton getText={() => rendererRef.current?.captureText() ?? ""} />
