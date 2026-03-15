@@ -165,6 +165,7 @@ export class AsciiRenderer {
       playsInline: true,
       crossOrigin: "anonymous",
       preload: "auto",
+      autoplay: true,
     });
     this.video.setAttribute("playsinline", "");
     this.video.setAttribute("webkit-playsinline", "");

@@ -105,7 +105,7 @@ export function Video2Ascii({
 
   return (
     <div className={`video-to-ascii ${className}`}>
-      <div ref={containerRef} style={{ overflow: "hidden", background: "#000" }}>
+      <div ref={containerRef} style={{ overflow: "hidden", background: "#000", opacity: isReady ? 1 : 0, transition: "opacity 0.3s ease" }}>
         {showStats && isReady && (
           <div style={{
             position: "absolute",
